@@ -19,7 +19,7 @@ revision:
 	docker compose run --rm migrate alembic revision --autogenerate -m "$(m)"
 
 seed:
-	docker compose run --rm backend python scripts/seed.py
+	docker compose run --rm backend python -m scripts.seed
 
-test:
+test: migrate
 	docker compose run --rm backend pytest
