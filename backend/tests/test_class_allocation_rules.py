@@ -2,7 +2,16 @@ from app.models import MembershipRole
 from tests.conftest import auth_header, make_class, make_event, make_membership, make_org, make_user
 
 
+def _set_minimal_requirement(client, org, event, organizer):
+    client.patch(
+        f"/api/v1/organizations/{org.id}/events/{event.id}/contract-requirements",
+        json={"fields": [{"key": "note", "label": "Note", "field_type": "text", "required": False}]},
+        headers=auth_header(organizer),
+    )
+
+
 def _invite_and_accept(client, org, event, organizer, judge):
+    _set_minimal_requirement(client, org, event, organizer)
     contract_id = client.post(
         f"/api/v1/organizations/{org.id}/events/{event.id}/contracts",
         json={"judge_email": judge.email, "judge_name": judge.name},
@@ -102,6 +111,7 @@ def test_cannot_allocate_before_accepted(client, db_session):
     cls = make_class(db, ev)
     db.commit()
 
+    _set_minimal_requirement(client, org, ev, organizer)
     contract_id = client.post(
         f"/api/v1/organizations/{org.id}/events/{ev.id}/contracts",
         json={"judge_email": judge.email, "judge_name": judge.name},

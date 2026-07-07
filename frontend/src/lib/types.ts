@@ -57,6 +57,25 @@ export interface MeResponse {
   memberships: MembershipWithOrgRead[];
 }
 
+export interface ClassRestriction {
+  discipline: string | null;
+  level: string | null;
+}
+
+export interface UserDetailsRead {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+  home_postcode: string | null;
+  class_restrictions: ClassRestriction[];
+}
+
+export interface ClassRestrictionOptions {
+  disciplines: string[];
+  levels: string[];
+}
+
 export interface EventRead {
   id: string;
   organization_id: string;
@@ -96,6 +115,8 @@ export interface ContractRead {
   id: string;
   event_id: string;
   judge_user_id: string;
+  judge_name: string;
+  judge_email: string;
   organization_id: string;
   status: ContractStatus;
   invited_by_user_id: string;
@@ -114,6 +135,9 @@ export interface MyContractRead {
   id: string;
   event_id: string;
   event_name: string;
+  venue: string | null;
+  event_start_date: string;
+  event_end_date: string;
   organization_id: string;
   organization_name: string;
   organization_slug: string;

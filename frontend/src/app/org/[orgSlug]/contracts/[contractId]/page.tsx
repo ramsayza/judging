@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
-import type { ContractRead, EventContractRequirementsRead, RequirementField } from "@/lib/types";
+import type { ContractRead, EventContractRequirementsRead, EventRead, RequirementField } from "@/lib/types";
 
 const LIFECYCLE_STEPS: { status: string; label: string }[] = [
   { status: "invitation", label: "Invited" },
@@ -31,6 +31,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
   const { contractId } = use(params);
   const { orgId, apiToken, role } = useOrgContext();
   const [contract, setContract] = useState<ContractRead | null>(null);
+  const [event, setEvent] = useState<EventRead | null>(null);
   const [requirementFields, setRequirementFields] = useState<RequirementField[]>([]);
   const [responses, setResponses] = useState<Record<string, string | string[]>>({});
   const [reason, setReason] = useState("");
@@ -49,6 +50,9 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
 
   useEffect(() => {
     if (!contract) return;
+    apiFetch(`/api/v1/organizations/${orgId}/events/${contract.event_id}`, { token: apiToken, orgId })
+      .then((res) => res.json())
+      .then(setEvent);
     apiFetch(`/api/v1/organizations/${orgId}/events/${contract.event_id}/contract-requirements`, {
       token: apiToken,
       orgId,
@@ -110,7 +114,15 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
     <main className="mx-auto max-w-xl">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Contract for event {contract.event_id}</CardTitle>
+          <div>
+            <CardTitle>{event ? event.name : `Contract for event ${contract.event_id}`}</CardTitle>
+            <p className="text-sm text-muted-foreground">Judge: {contract.judge_name}</p>
+            {event && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {event.venue ?? "No venue set"} — {event.start_date} to {event.end_date}
+              </p>
+            )}
+          </div>
           <StatusBadge status={contract.status} />
         </CardHeader>
         <CardContent className="space-y-6">

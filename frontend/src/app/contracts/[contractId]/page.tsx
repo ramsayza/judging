@@ -122,9 +122,15 @@ export default function MyContractDetailPage({ params }: { params: Promise<{ con
       <GlobalNav />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>
-            {contract.event_name} <span className="font-normal text-muted-foreground">— {contract.organization_name}</span>
-          </CardTitle>
+          <div>
+            <CardTitle>
+              {contract.event_name}{" "}
+              <span className="font-normal text-muted-foreground">— {contract.organization_name}</span>
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {contract.venue ?? "No venue set"} — {contract.event_start_date} to {contract.event_end_date}
+            </p>
+          </div>
           <StatusBadge status={contract.status} />
         </CardHeader>
         <CardContent className="space-y-6">

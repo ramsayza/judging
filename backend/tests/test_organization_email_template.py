@@ -101,6 +101,11 @@ def test_custom_template_used_when_inviting_judge(client, db_session, caplog):
         json={"subject": "Custom subject", "body": "Custom body for {judge_name}"},
         headers=auth_header(organizer),
     )
+    client.patch(
+        f"/api/v1/organizations/{org.id}/events/{ev.id}/contract-requirements",
+        json={"fields": [{"key": "note", "label": "Note", "field_type": "text", "required": False}]},
+        headers=auth_header(organizer),
+    )
 
     with caplog.at_level(logging.INFO, logger="app.email"):
         r = client.post(

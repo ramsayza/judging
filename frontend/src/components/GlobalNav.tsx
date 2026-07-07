@@ -15,6 +15,9 @@ export function GlobalNav() {
         <Button asChild variant="ghost" size="sm">
           <Link href="/onboarding">My Organizations</Link>
         </Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/profile">Your Details</Link>
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => signOut()}>
           Sign out
         </Button>

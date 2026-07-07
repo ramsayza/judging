@@ -11,6 +11,7 @@ from app.models.contract import Contract, ContractStatus
 from app.models.event import Event
 from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import Organization
+from app.models.user import User
 from app.schemas.contract import ContractAcceptRequest, ContractActionRequest, ContractCreate, ContractRead
 from app.schemas.event import RequirementField
 from app.services.contract_service import apply_action
@@ -32,10 +33,14 @@ def create_contract(
     payload: ContractCreate,
     db: Session = Depends(get_db),
     membership: Membership = Depends(require_role(MembershipRole.organizer)),
-) -> Contract:
+) -> ContractRead:
     event = db.query(Event).filter(Event.id == event_id, Event.organization_id == org_id).one_or_none()
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "event not found")
+    if not event.contract_requirement_fields:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "set this event's judging requirements before inviting a judge"
+        )
 
     org = db.get(Organization, org_id)
 
@@ -89,7 +94,7 @@ def create_contract(
         body_template=org.invitation_email_body,
     )
 
-    return contract
+    return _to_contract_read(contract, judge)
 
 
 @router.get("/organizations/{org_id}/contracts", response_model=list[ContractRead])
@@ -99,15 +104,20 @@ def list_contracts(
     status_filter: ContractStatus | None = Query(default=None, alias="status"),
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
-) -> list[Contract]:
-    query = db.query(Contract).filter(Contract.organization_id == org_id)
+) -> list[ContractRead]:
+    query = (
+        db.query(Contract, User)
+        .join(User, Contract.judge_user_id == User.id)
+        .filter(Contract.organization_id == org_id)
+    )
     if membership.role == MembershipRole.judge:
         query = query.filter(Contract.judge_user_id == membership.user_id)
     if event_id is not None:
         query = query.filter(Contract.event_id == event_id)
     if status_filter is not None:
         query = query.filter(Contract.status == status_filter)
-    return query.order_by(Contract.invited_at.desc()).all()
+    rows = query.order_by(Contract.invited_at.desc()).all()
+    return [_to_contract_read(contract, judge) for contract, judge in rows]
 
 
 @router.get("/organizations/{org_id}/contracts/{contract_id}", response_model=ContractRead)
@@ -116,11 +126,12 @@ def get_contract(
     contract_id: str,
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
-) -> Contract:
+) -> ContractRead:
     contract = _get_contract_or_404(db, org_id, contract_id)
     if membership.role == MembershipRole.judge and contract.judge_user_id != membership.user_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "contract not found")
-    return contract
+    judge = db.get(User, contract.judge_user_id)
+    return _to_contract_read(contract, judge)
 
 
 @router.post("/organizations/{org_id}/contracts/{contract_id}/accept", response_model=ContractRead)
@@ -130,7 +141,7 @@ def accept_contract(
     payload: ContractAcceptRequest,
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
-) -> Contract:
+) -> ContractRead:
     contract = _get_contract_or_404(db, org_id, contract_id)
     if contract.judge_user_id != membership.user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "only the invited judge can perform this action")
@@ -147,9 +158,12 @@ def accept_contract(
     # only write these answers ever get.
     contract.requirement_responses = normalized_responses
     try:
-        return apply_action(db, contract, "accept", membership.user_id, reason=None)
+        contract = apply_action(db, contract, "accept", membership.user_id, reason=None)
     except ContractTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    judge = db.get(User, contract.judge_user_id)
+    return _to_contract_read(contract, judge)
 
 
 @router.post("/organizations/{org_id}/contracts/{contract_id}/decline", response_model=ContractRead)
@@ -159,7 +173,7 @@ def decline_contract(
     payload: ContractActionRequest,
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
-) -> Contract:
+) -> ContractRead:
     return _perform_judge_action(db, org_id, contract_id, "decline", membership, reason=payload.reason)
 
 
@@ -169,7 +183,7 @@ def appoint_contract(
     contract_id: str,
     db: Session = Depends(get_db),
     membership: Membership = Depends(require_role(MembershipRole.organizer)),
-) -> Contract:
+) -> ContractRead:
     return _perform_organizer_action(db, org_id, contract_id, "appoint", membership, reason=None)
 
 
@@ -179,7 +193,7 @@ def complete_contract(
     contract_id: str,
     db: Session = Depends(get_db),
     membership: Membership = Depends(require_role(MembershipRole.organizer)),
-) -> Contract:
+) -> ContractRead:
     return _perform_organizer_action(db, org_id, contract_id, "complete", membership, reason=None)
 
 
@@ -190,30 +204,56 @@ def cancel_contract(
     payload: ContractActionRequest,
     db: Session = Depends(get_db),
     membership: Membership = Depends(require_role(MembershipRole.organizer)),
-) -> Contract:
+) -> ContractRead:
     return _perform_organizer_action(db, org_id, contract_id, "cancel", membership, reason=payload.reason)
 
 
 def _perform_judge_action(
     db: Session, org_id: str, contract_id: str, action: str, membership: Membership, reason: str | None
-) -> Contract:
+) -> ContractRead:
     contract = _get_contract_or_404(db, org_id, contract_id)
     if contract.judge_user_id != membership.user_id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "only the invited judge can perform this action")
     try:
-        return apply_action(db, contract, action, membership.user_id, reason=reason)
+        contract = apply_action(db, contract, action, membership.user_id, reason=reason)
     except ContractTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    judge = db.get(User, contract.judge_user_id)
+    return _to_contract_read(contract, judge)
 
 
 def _perform_organizer_action(
     db: Session, org_id: str, contract_id: str, action: str, membership: Membership, reason: str | None
-) -> Contract:
+) -> ContractRead:
     contract = _get_contract_or_404(db, org_id, contract_id)
     try:
-        return apply_action(db, contract, action, membership.user_id, reason=reason)
+        contract = apply_action(db, contract, action, membership.user_id, reason=reason)
     except ContractTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    judge = db.get(User, contract.judge_user_id)
+    return _to_contract_read(contract, judge)
+
+
+def _to_contract_read(contract: Contract, judge: User) -> ContractRead:
+    return ContractRead(
+        id=contract.id,
+        event_id=contract.event_id,
+        judge_user_id=contract.judge_user_id,
+        judge_name=judge.name,
+        judge_email=judge.email,
+        organization_id=contract.organization_id,
+        status=contract.status,
+        invited_by_user_id=contract.invited_by_user_id,
+        invited_at=contract.invited_at,
+        responded_at=contract.responded_at,
+        appointed_at=contract.appointed_at,
+        completed_at=contract.completed_at,
+        cancelled_at=contract.cancelled_at,
+        decline_reason=contract.decline_reason,
+        cancel_reason=contract.cancel_reason,
+        notes=contract.notes,
+        requirement_responses=contract.requirement_responses,
+    )
 
 
 def _get_contract_or_404(db: Session, org_id: str, contract_id: str) -> Contract:

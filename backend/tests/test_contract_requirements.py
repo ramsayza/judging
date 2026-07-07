@@ -10,6 +10,37 @@ def _invite(client, org, event, organizer, judge):
     )
 
 
+def test_invite_without_requirements_rejected(client, db_session):
+    db = db_session
+    org = make_org(db)
+    organizer = make_user(db, "organizer@example.com")
+    judge = make_user(db, "judge@example.com")
+    make_membership(db, organizer, org, MembershipRole.organizer)
+    ev = make_event(db, org, organizer)
+    db.commit()
+
+    r = _invite(client, org, ev, organizer, judge)
+    assert r.status_code == 409
+
+
+def test_invite_after_setting_requirements_succeeds(client, db_session):
+    db = db_session
+    org = make_org(db)
+    organizer = make_user(db, "organizer@example.com")
+    judge = make_user(db, "judge@example.com")
+    make_membership(db, organizer, org, MembershipRole.organizer)
+    ev = make_event(db, org, organizer)
+    db.commit()
+
+    client.patch(
+        f"/api/v1/organizations/{org.id}/events/{ev.id}/contract-requirements",
+        json={"fields": [{"key": "note", "label": "Note", "field_type": "text", "required": False}]},
+        headers=auth_header(organizer),
+    )
+    r = _invite(client, org, ev, organizer, judge)
+    assert r.status_code == 201
+
+
 def test_patch_requirements_duplicate_keys_rejected(client, db_session):
     db = db_session
     org = make_org(db)
@@ -205,10 +236,11 @@ def test_no_endpoint_exists_to_edit_responses_after_accept(client, db_session):
     ev = make_event(db, org, organizer)
     db.commit()
 
+    _set_shirt_size_requirement(client, org, ev, organizer)
     contract_id = _invite(client, org, ev, organizer, judge).json()["id"]
     client.post(
         f"/api/v1/organizations/{org.id}/contracts/{contract_id}/accept",
-        json={"responses": {}},
+        json={"responses": {"shirt_size": "M"}},
         headers=auth_header(judge),
     )
 

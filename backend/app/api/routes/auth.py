@@ -7,6 +7,7 @@ from app.core.security import create_api_token
 from app.db import get_db
 from app.models.contract import Contract
 from app.models.event import Event
+from app.models.event_class import EventClass
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
@@ -14,8 +15,11 @@ from app.schemas.auth import MeResponse
 from app.schemas.contract import MyContractRead
 from app.schemas.membership import MembershipWithOrgRead
 from app.schemas.user import (
+    ClassRestrictionOptions,
     DevLoginRequest,
     DevLoginResponse,
+    UserDetailsRead,
+    UserDetailsUpdate,
     UserRead,
     UserUpsertRequest,
     UserUpsertResponse,
@@ -83,6 +87,9 @@ def _my_contract_read(contract: Contract, event: Event, org: Organization) -> My
         id=contract.id,
         event_id=contract.event_id,
         event_name=event.name,
+        venue=event.venue,
+        event_start_date=event.start_date,
+        event_end_date=event.end_date,
         organization_id=contract.organization_id,
         organization_name=org.name,
         organization_slug=org.slug,
@@ -130,3 +137,44 @@ def read_my_contract(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "contract not found")
     return _my_contract_read(*row)
+
+
+def _user_details_read(user: User) -> UserDetailsRead:
+    return UserDetailsRead(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        home_postcode=user.home_postcode,
+        class_restrictions=user.class_restrictions or [],
+    )
+
+
+@router.get("/me/details", response_model=UserDetailsRead)
+def read_my_details(current_user: User = Depends(get_current_user)) -> UserDetailsRead:
+    return _user_details_read(current_user)
+
+
+@router.patch("/me/details", response_model=UserDetailsRead)
+def update_my_details(
+    payload: UserDetailsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserDetailsRead:
+    current_user.home_postcode = payload.home_postcode
+    current_user.class_restrictions = [r.model_dump(mode="json") for r in payload.class_restrictions]
+    db.commit()
+    db.refresh(current_user)
+    return _user_details_read(current_user)
+
+
+@router.get("/me/class-restriction-options", response_model=ClassRestrictionOptions)
+def read_class_restriction_options(
+    _current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> ClassRestrictionOptions:
+    disciplines = [
+        row[0]
+        for row in db.query(EventClass.discipline).filter(EventClass.discipline.isnot(None)).distinct().all()
+    ]
+    levels = [row[0] for row in db.query(EventClass.level).filter(EventClass.level.isnot(None)).distinct().all()]
+    return ClassRestrictionOptions(disciplines=sorted(disciplines), levels=sorted(levels))

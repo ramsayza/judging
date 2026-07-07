@@ -19,6 +19,7 @@ import type {
   AllocationBoardEntry,
   ContractRead,
   EventClassRead,
+  EventContractRequirementsRead,
   EventRead,
   MembershipWithUserRead,
 } from "@/lib/types";
@@ -32,6 +33,7 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
   const [contracts, setContracts] = useState<ContractRead[]>([]);
   const [judges, setJudges] = useState<MembershipWithUserRead[]>([]);
   const [board, setBoard] = useState<AllocationBoardEntry[]>([]);
+  const [requirementFieldsCount, setRequirementFieldsCount] = useState<number | null>(null);
 
   const [newClassName, setNewClassName] = useState("");
   const [inviteJudgeEmail, setInviteJudgeEmail] = useState("");
@@ -52,6 +54,9 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
     apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}/allocations`, { token: apiToken, orgId })
       .then((res) => res.json())
       .then(setBoard);
+    apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}/contract-requirements`, { token: apiToken, orgId })
+      .then((res) => res.json())
+      .then((data: EventContractRequirementsRead) => setRequirementFieldsCount(data.fields.length));
     if (canManage) {
       apiFetch(`/api/v1/organizations/${orgId}/memberships`, { token: apiToken, orgId })
         .then((res) => res.json())
@@ -203,7 +208,7 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
                       <SelectContent>
                         {allocatableContracts.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
-                            {c.judge_user_id}
+                            {c.judge_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -235,7 +240,15 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
           <CardTitle className="text-lg">Contracts</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {canManage && (
+          {canManage && requirementFieldsCount === 0 && (
+            <div className="flex items-center justify-between rounded-md border border-dashed p-3 text-sm">
+              <span className="text-muted-foreground">Set judging requirements before inviting a judge.</span>
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/org/${orgSlug}/events/${eventId}/requirements`}>Set requirements</Link>
+              </Button>
+            </div>
+          )}
+          {canManage && requirementFieldsCount !== null && requirementFieldsCount > 0 && (
             <form className="flex flex-wrap items-end gap-2" onSubmit={inviteJudge}>
               <Input
                 type="email"
@@ -276,7 +289,7 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
                 <TableRow key={c.id}>
                   <TableCell>
                     <Link className="font-medium hover:underline" href={`/org/${orgSlug}/contracts/${c.id}`}>
-                      Contract {c.id.slice(0, 8)}
+                      {c.judge_name}
                     </Link>
                   </TableCell>
                   <TableCell>

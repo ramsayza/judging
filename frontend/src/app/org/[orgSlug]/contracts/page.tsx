@@ -27,6 +27,7 @@ export default function ContractsListPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Event</TableHead>
+            <TableHead>Judge</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -37,6 +38,10 @@ export default function ContractsListPage() {
                 <Link className="font-medium hover:underline" href={`/org/${orgSlug}/contracts/${c.id}`}>
                   Event {c.event_id}
                 </Link>
+              </TableCell>
+              <TableCell>
+                {c.judge_name}
+                <div className="text-xs text-muted-foreground">{c.judge_email}</div>
               </TableCell>
               <TableCell>
                 <StatusBadge status={c.status} />

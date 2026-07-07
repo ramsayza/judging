@@ -4,15 +4,20 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Info } from "lucide-react";
 
+import { GlobalNav } from "@/components/GlobalNav";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/apiClient";
+import { slugify } from "@/lib/utils";
 import type { MembershipWithOrgRead, MeResponse, OrganizationPublicRead } from "@/lib/types";
 
 export default function OnboardingPage() {
@@ -23,6 +28,7 @@ export default function OnboardingPage() {
   const [orgs, setOrgs] = useState<OrganizationPublicRead[]>([]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,6 +86,7 @@ export default function OnboardingPage() {
 
   return (
     <main className="mx-auto max-w-3xl p-6">
+      <GlobalNav />
       <PageHeader title="Welcome" description="Your organizations, and ways to join more." />
       {message && <p className="mb-4 text-sm text-destructive">{message}</p>}
 
@@ -123,13 +130,40 @@ export default function OnboardingPage() {
             <CardContent>
               <form className="flex flex-wrap items-end gap-3" onSubmit={createOrg}>
                 <div className="flex-1 space-y-1">
-                  <Input placeholder="Organization name" value={name} onChange={(e) => setName(e.target.value)} required />
+                  <Label htmlFor="org-name">Organization name</Label>
+                  <Input
+                    id="org-name"
+                    placeholder="Organization name"
+                    value={name}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setName(nextName);
+                      if (!slugManuallyEdited) setSlug(slugify(nextName));
+                    }}
+                    required
+                  />
                 </div>
                 <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-1">
+                    <Label htmlFor="org-slug">URL slug</Label>
+                    <Tooltip>
+                      <TooltipTrigger type="button">
+                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        This becomes part of your organization&apos;s URL (/org/your-slug). Lowercase letters,
+                        numbers, and hyphens only.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
+                    id="org-slug"
                     placeholder="url-slug"
                     value={slug}
-                    onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                    onChange={(e) => {
+                      setSlugManuallyEdited(true);
+                      setSlug(e.target.value.toLowerCase());
+                    }}
                     pattern="^[a-z0-9]+(-[a-z0-9]+)*$"
                     required
                   />

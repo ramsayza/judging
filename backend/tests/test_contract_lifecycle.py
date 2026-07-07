@@ -2,7 +2,16 @@ from app.models import Membership, MembershipRole, MembershipStatus, User
 from tests.conftest import auth_header, make_class, make_event, make_membership, make_org, make_user
 
 
+def _set_minimal_requirement(client, org, event, organizer):
+    client.patch(
+        f"/api/v1/organizations/{org.id}/events/{event.id}/contract-requirements",
+        json={"fields": [{"key": "note", "label": "Note", "field_type": "text", "required": False}]},
+        headers=auth_header(organizer),
+    )
+
+
 def _invite(client, org, event, organizer, judge):
+    _set_minimal_requirement(client, org, event, organizer)
     return client.post(
         f"/api/v1/organizations/{org.id}/events/{event.id}/contracts",
         json={"judge_email": judge.email, "judge_name": judge.name},
@@ -18,6 +27,7 @@ def test_inviting_unknown_email_creates_judge_and_membership(client, db_session)
     ev = make_event(db, org, organizer)
     db.commit()
 
+    _set_minimal_requirement(client, org, ev, organizer)
     r = client.post(
         f"/api/v1/organizations/{org.id}/events/{ev.id}/contracts",
         json={"judge_email": "newjudge@example.com", "judge_name": "New Judge"},

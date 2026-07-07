@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -11,6 +11,8 @@ class ContractRead(BaseModel):
     id: str
     event_id: str
     judge_user_id: str
+    judge_name: str
+    judge_email: str
     organization_id: str
     status: ContractStatus
     invited_by_user_id: str
@@ -45,6 +47,9 @@ class MyContractRead(BaseModel):
     id: str
     event_id: str
     event_name: str
+    venue: str | None
+    event_start_date: date
+    event_end_date: date
     organization_id: str
     organization_name: str
     organization_slug: str

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { Info } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { RoleGate } from "@/components/RoleGate";
@@ -9,14 +10,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/apiClient";
+import { toFieldKey } from "@/lib/utils";
 import { useOrgContext } from "@/lib/org-context";
 import type { EventContractRequirementsRead, RequirementField, RequirementFieldType } from "@/lib/types";
 
-type EditableField = Omit<RequirementField, "options"> & { optionsText: string };
+type EditableField = Omit<RequirementField, "options"> & { optionsText: string; keyManuallyEdited: boolean };
 
 function toEditable(field: RequirementField): EditableField {
-  return { ...field, optionsText: (field.options ?? []).join(", ") };
+  // Loaded from the server -- already has a stable key. Don't let a later
+  // label tweak silently rewrite it (already-accepted contracts' stored
+  // responses are keyed by it).
+  return { ...field, optionsText: (field.options ?? []).join(", "), keyManuallyEdited: true };
 }
 
 function toRequirementField(field: EditableField): RequirementField {
@@ -31,13 +37,42 @@ function toRequirementField(field: EditableField): RequirementField {
 }
 
 function blankField(): EditableField {
-  return { key: "", label: "", field_type: "text", required: false, optionsText: "" };
+  return { key: "", label: "", field_type: "text", required: false, optionsText: "", keyManuallyEdited: false };
+}
+
+const KEY_PATTERN = /^[a-z][a-z0-9_]*$/;
+
+function validateFields(fields: EditableField[]): string[] {
+  const errors: string[] = [];
+  const seenKeys = new Set<string>();
+
+  fields.forEach((f, i) => {
+    const label = f.label.trim() || `Field ${i + 1}`;
+    if (!f.label.trim()) errors.push(`${label}: label is required.`);
+    if (!KEY_PATTERN.test(f.key)) {
+      errors.push(`${label}: key must start with a lowercase letter and contain only lowercase letters, numbers, and underscores.`);
+    } else if (seenKeys.has(f.key)) {
+      errors.push(`${label}: key "${f.key}" is used by more than one field.`);
+    }
+    seenKeys.add(f.key);
+
+    if (f.field_type === "select" || f.field_type === "multiselect") {
+      const options = f.optionsText
+        .split(",")
+        .map((o) => o.trim())
+        .filter(Boolean);
+      if (options.length === 0) errors.push(`${label}: select/multi-select fields need at least one option.`);
+    }
+  });
+
+  return errors;
 }
 
 function RequirementsPageContent({ eventId }: { eventId: string }) {
   const { orgId, apiToken } = useOrgContext();
   const [fields, setFields] = useState<EditableField[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}/contract-requirements`, { token: apiToken, orgId })
@@ -55,6 +90,12 @@ function RequirementsPageContent({ eventId }: { eventId: string }) {
 
   async function save() {
     setMessage(null);
+    const validationErrors = validateFields(fields);
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors([]);
     const res = await apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}/contract-requirements`, {
       method: "PATCH",
       token: apiToken,
@@ -80,24 +121,48 @@ function RequirementsPageContent({ eventId }: { eventId: string }) {
       <Card>
         <CardContent className="space-y-4 pt-6">
           {message && <p className="text-sm text-muted-foreground">{message}</p>}
+          {errors.length > 0 && (
+            <div className="space-y-1 rounded-md border border-destructive/50 bg-destructive/10 p-3">
+              {errors.map((err, i) => (
+                <p key={i} className="text-sm text-destructive">
+                  {err}
+                </p>
+              ))}
+            </div>
+          )}
 
           {fields.map((field, i) => (
             <div key={i} className="space-y-3 rounded-md border p-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Key</Label>
+              <div className="space-y-1">
+                <Label className="text-base">Field label</Label>
+                <Input
+                  className="text-base font-medium"
+                  placeholder="Shirt size"
+                  value={field.label}
+                  onChange={(e) => {
+                    const nextLabel = e.target.value;
+                    updateField(i, {
+                      label: nextLabel,
+                      key: field.keyManuallyEdited ? field.key : toFieldKey(nextLabel),
+                    });
+                  }}
+                />
+                <div className="flex items-center gap-1 pt-1">
+                  <span className="text-xs text-muted-foreground">Key</span>
+                  <Tooltip>
+                    <TooltipTrigger type="button">
+                      <Info className="h-3 w-3 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Internal identifier used to store this field&apos;s answer — auto-filled from the label,
+                      edit only if you need a specific value.
+                    </TooltipContent>
+                  </Tooltip>
                   <Input
+                    className="h-7 max-w-[220px] text-xs text-muted-foreground"
                     placeholder="shirt_size"
                     value={field.key}
-                    onChange={(e) => updateField(i, { key: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Label</Label>
-                  <Input
-                    placeholder="Shirt size"
-                    value={field.label}
-                    onChange={(e) => updateField(i, { label: e.target.value })}
+                    onChange={(e) => updateField(i, { key: e.target.value, keyManuallyEdited: true })}
                   />
                 </div>
               </div>
@@ -134,7 +199,17 @@ function RequirementsPageContent({ eventId }: { eventId: string }) {
 
               {(field.field_type === "select" || field.field_type === "multiselect") && (
                 <div className="space-y-1">
-                  <Label>Options (comma-separated)</Label>
+                  <div className="flex items-center gap-1">
+                    <Label>Options (comma-separated)</Label>
+                    <Tooltip>
+                      <TooltipTrigger type="button">
+                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Comma-separated list of choices the judge can pick from, e.g. S, M, L, XL.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                   <Input
                     placeholder="S, M, L, XL"
                     value={field.optionsText}
