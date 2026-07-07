@@ -28,3 +28,16 @@ class OrganizationPublicRead(BaseModel):
     id: str
     name: str
     slug: str
+
+
+class OrganizationEmailTemplateRead(BaseModel):
+    subject: str | None
+    body: str | None
+    effective_subject: str
+    effective_body: str
+    placeholders: list[str]
+
+
+class OrganizationEmailTemplateUpdate(BaseModel):
+    subject: str | None
+    body: str | None

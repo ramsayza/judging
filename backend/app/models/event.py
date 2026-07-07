@@ -2,7 +2,7 @@ import enum
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, Enum, ForeignKey, Index, String
+from sqlalchemy import JSON, Date, Enum, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -34,5 +34,6 @@ class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     created_by_user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
+    contract_requirement_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     classes: Mapped[list["EventClass"]] = relationship(back_populates="event")

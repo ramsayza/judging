@@ -24,6 +24,14 @@ export interface OrganizationPublicRead {
   slug: string;
 }
 
+export interface OrganizationEmailTemplateRead {
+  subject: string | null;
+  body: string | null;
+  effective_subject: string;
+  effective_body: string;
+  placeholders: string[];
+}
+
 export interface MembershipWithOrgRead {
   id: string;
   user_id: string;
@@ -60,6 +68,20 @@ export interface EventRead {
   created_by_user_id: string;
 }
 
+export type RequirementFieldType = "text" | "number" | "select" | "multiselect";
+
+export interface RequirementField {
+  key: string;
+  label: string;
+  field_type: RequirementFieldType;
+  required: boolean;
+  options: string[] | null;
+}
+
+export interface EventContractRequirementsRead {
+  fields: RequirementField[];
+}
+
 export interface EventClassRead {
   id: string;
   event_id: string;
@@ -85,6 +107,25 @@ export interface ContractRead {
   decline_reason: string | null;
   cancel_reason: string | null;
   notes: string | null;
+  requirement_responses: Record<string, string | string[]> | null;
+}
+
+export interface MyContractRead {
+  id: string;
+  event_id: string;
+  event_name: string;
+  organization_id: string;
+  organization_name: string;
+  organization_slug: string;
+  status: ContractStatus;
+  invited_at: string;
+  responded_at: string | null;
+  appointed_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  decline_reason: string | null;
+  cancel_reason: string | null;
+  requirement_responses: Record<string, string | string[]> | null;
 }
 
 export interface ClassAllocationRead {

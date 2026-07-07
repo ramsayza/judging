@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -52,6 +52,7 @@ class Contract(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     decline_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requirement_responses: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     allocations: Mapped[list["ClassAllocation"]] = relationship(
         back_populates="contract", cascade="all, delete-orphan"

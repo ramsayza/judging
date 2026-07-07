@@ -3,6 +3,16 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 
+import { PageHeader } from "@/components/PageHeader";
+import { RoleGate } from "@/components/RoleGate";
+import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
 import type {
@@ -13,8 +23,7 @@ import type {
   MembershipWithUserRead,
 } from "@/lib/types";
 
-export default function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
-  const { eventId } = use(params);
+function EventDetailPageContent({ eventId }: { eventId: string }) {
   const { orgId, orgSlug, role, apiToken } = useOrgContext();
   const canManage = role === "organizer" || role === "admin";
 
@@ -135,108 +144,177 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
     refresh();
   }
 
-  if (!event) return <p>Loading...</p>;
+  if (!event) return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
 
   const allocatableContracts = contracts.filter((c) => c.status === "accepted" || c.status === "appointed");
 
   return (
-    <main>
-      <h1>{event.name}</h1>
-      <p>
-        {event.venue ?? "No venue set"} — {event.start_date} to {event.end_date} — {event.status}
-      </p>
-      {error && <p>{error}</p>}
+    <main className="space-y-6">
+      <PageHeader
+        title={event.name}
+        description={`${event.venue ?? "No venue set"} — ${event.start_date} to ${event.end_date}`}
+        action={
+          <div className="flex items-center gap-3">
+            {canManage && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/org/${orgSlug}/events/${eventId}/requirements`}>Judging requirements</Link>
+              </Button>
+            )}
+            <StatusBadge status={event.status} />
+          </div>
+        }
+      />
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <section>
-        <h2>Classes</h2>
-        <ul>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Classes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           {classes.map((cls) => {
             const allocations = board.filter((b) => b.event_class_id === cls.id);
             return (
-              <li key={cls.id}>
-                <strong>{cls.name}</strong>
-                <ul>
+              <div key={cls.id} className="rounded-md border p-4">
+                <p className="font-medium">{cls.name}</p>
+                <div className="mt-2 space-y-1">
                   {allocations.map((a) => (
-                    <li key={a.allocation_id}>
-                      {a.judge_name} ({a.contract_status}){" "}
+                    <div key={a.allocation_id} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        {a.judge_name} <Badge variant="outline">{a.contract_status}</Badge>
+                      </span>
                       {canManage && (
-                        <button onClick={() => removeAllocation(a.contract_id, a.allocation_id)}>Remove</button>
+                        <Button size="sm" variant="ghost" onClick={() => removeAllocation(a.contract_id, a.allocation_id)}>
+                          Remove
+                        </Button>
                       )}
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                  {allocations.length === 0 && <p className="text-sm text-muted-foreground">No judges allocated yet.</p>}
+                </div>
                 {canManage && (
-                  <span>
-                    <select
+                  <div className="mt-3 flex items-center gap-2">
+                    <Select
                       value={allocateClassId[cls.id] ?? ""}
-                      onChange={(e) => setAllocateClassId({ ...allocateClassId, [cls.id]: e.target.value })}
+                      onValueChange={(value) => setAllocateClassId({ ...allocateClassId, [cls.id]: value })}
                     >
-                      <option value="">Select accepted judge...</option>
-                      {allocatableContracts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.judge_user_id}
-                        </option>
-                      ))}
-                    </select>
-                    <button onClick={() => allocate(cls.id)}>Allocate</button>
-                  </span>
+                      <SelectTrigger className="w-64">
+                        <SelectValue placeholder="Select accepted judge..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allocatableContracts.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.judge_user_id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" onClick={() => allocate(cls.id)}>
+                      Allocate
+                    </Button>
+                  </div>
                 )}
-              </li>
+              </div>
             );
           })}
-        </ul>
-        {canManage && (
-          <form onSubmit={addClass}>
-            <input placeholder="Class name" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required />
-            <button type="submit">Add class</button>
-          </form>
-        )}
-      </section>
+          {classes.length === 0 && <p className="text-sm text-muted-foreground">No classes yet.</p>}
 
-      <section>
-        <h2>Contracts</h2>
-        {canManage && (
-          <form onSubmit={inviteJudge}>
-            <input
-              type="email"
-              list="known-judges"
-              placeholder="Judge email"
-              value={inviteJudgeEmail}
-              onChange={(e) => setInviteJudgeEmail(e.target.value)}
-              required
-            />
-            <datalist id="known-judges">
-              {judges.map((j) => (
-                <option key={j.user_id} value={j.user_email}>
-                  {j.user_name}
-                </option>
+          {canManage && (
+            <>
+              <Separator />
+              <form className="flex items-end gap-2" onSubmit={addClass}>
+                <Input placeholder="Class name" value={newClassName} onChange={(e) => setNewClassName(e.target.value)} required />
+                <Button type="submit">Add class</Button>
+              </form>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Contracts</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {canManage && (
+            <form className="flex flex-wrap items-end gap-2" onSubmit={inviteJudge}>
+              <Input
+                type="email"
+                list="known-judges"
+                placeholder="Judge email"
+                className="max-w-xs"
+                value={inviteJudgeEmail}
+                onChange={(e) => setInviteJudgeEmail(e.target.value)}
+                required
+              />
+              <datalist id="known-judges">
+                {judges.map((j) => (
+                  <option key={j.user_id} value={j.user_email}>
+                    {j.user_name}
+                  </option>
+                ))}
+              </datalist>
+              <Input
+                placeholder="Name (only needed if new)"
+                className="max-w-xs"
+                value={inviteJudgeName}
+                onChange={(e) => setInviteJudgeName(e.target.value)}
+              />
+              <Button type="submit">Invite judge</Button>
+            </form>
+          )}
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Contract</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contracts.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Link className="font-medium hover:underline" href={`/org/${orgSlug}/contracts/${c.id}`}>
+                      Contract {c.id.slice(0, 8)}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={c.status} />
+                  </TableCell>
+                  <TableCell className="space-x-2 text-right">
+                    {canManage && c.status === "accepted" && (
+                      <Button size="sm" onClick={() => contractAction(c.id, "appoint")}>
+                        Appoint
+                      </Button>
+                    )}
+                    {canManage && c.status === "appointed" && (
+                      <Button size="sm" onClick={() => contractAction(c.id, "complete")}>
+                        Complete
+                      </Button>
+                    )}
+                    {canManage && ["invitation", "accepted", "appointed"].includes(c.status) && (
+                      <Button size="sm" variant="destructive" onClick={() => contractAction(c.id, "cancel")}>
+                        Cancel
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
               ))}
-            </datalist>
-            <input
-              placeholder="Name (only needed if new)"
-              value={inviteJudgeName}
-              onChange={(e) => setInviteJudgeName(e.target.value)}
-            />
-            <button type="submit">Invite judge</button>
-          </form>
-        )}
-        <ul>
-          {contracts.map((c) => (
-            <li key={c.id}>
-              <Link href={`/org/${orgSlug}/contracts/${c.id}`}>Contract {c.id}</Link> — {c.status}
-              {canManage && c.status === "accepted" && (
-                <button onClick={() => contractAction(c.id, "appoint")}>Appoint</button>
-              )}
-              {canManage && c.status === "appointed" && (
-                <button onClick={() => contractAction(c.id, "complete")}>Complete</button>
-              )}
-              {canManage && ["invitation", "accepted", "appointed"].includes(c.status) && (
-                <button onClick={() => contractAction(c.id, "cancel")}>Cancel</button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </TableBody>
+          </Table>
+          {contracts.length === 0 && <p className="text-sm text-muted-foreground">No contracts yet.</p>}
+        </CardContent>
+      </Card>
     </main>
+  );
+}
+
+export default function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
+  const { eventId } = use(params);
+  return (
+    <RoleGate allow={["organizer", "admin"]}>
+      <EventDetailPageContent eventId={eventId} />
+    </RoleGate>
   );
 }

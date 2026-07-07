@@ -11,9 +11,11 @@ from app.models.contract import Contract, ContractStatus
 from app.models.event import Event
 from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import Organization
-from app.schemas.contract import ContractActionRequest, ContractCreate, ContractRead
+from app.schemas.contract import ContractAcceptRequest, ContractActionRequest, ContractCreate, ContractRead
+from app.schemas.event import RequirementField
 from app.services.contract_service import apply_action
 from app.services.email_service import send_judge_invitation_email
+from app.services.requirement_service import validate_responses
 from app.services.user_service import get_or_create_judge
 
 router = APIRouter(tags=["contracts"])
@@ -82,8 +84,9 @@ def create_contract(
         event_name=event.name,
         event_start_date=event.start_date,
         event_end_date=event.end_date,
-        org_slug=org.slug,
         contract_id=contract.id,
+        subject_template=org.invitation_email_subject,
+        body_template=org.invitation_email_body,
     )
 
     return contract
@@ -124,10 +127,29 @@ def get_contract(
 def accept_contract(
     org_id: str,
     contract_id: str,
+    payload: ContractAcceptRequest,
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
 ) -> Contract:
-    return _perform_judge_action(db, org_id, contract_id, "accept", membership, reason=None)
+    contract = _get_contract_or_404(db, org_id, contract_id)
+    if contract.judge_user_id != membership.user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the invited judge can perform this action")
+
+    event = db.get(Event, contract.event_id)
+    fields = [RequirementField(**f) for f in (event.contract_requirement_fields or [])]
+    try:
+        normalized_responses = validate_responses(fields, payload.responses)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+    # Responses are captured exactly once, right here -- there is no route
+    # anywhere that updates requirement_responses after this, so this is the
+    # only write these answers ever get.
+    contract.requirement_responses = normalized_responses
+    try:
+        return apply_action(db, contract, "accept", membership.user_id, reason=None)
+    except ContractTransitionError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.post("/organizations/{org_id}/contracts/{contract_id}/decline", response_model=ContractRead)

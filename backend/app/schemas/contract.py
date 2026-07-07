@@ -22,6 +22,7 @@ class ContractRead(BaseModel):
     decline_reason: str | None
     cancel_reason: str | None
     notes: str | None
+    requirement_responses: dict[str, str | list[str]] | None
 
 
 class ContractCreate(BaseModel):
@@ -31,3 +32,28 @@ class ContractCreate(BaseModel):
 
 class ContractActionRequest(BaseModel):
     reason: str | None = None
+
+
+class ContractAcceptRequest(BaseModel):
+    responses: dict[str, str | list[str]] = {}
+
+
+class MyContractRead(BaseModel):
+    """A judge's contract, with enough organization/event context attached to
+    render and act on it without ever navigating an org-scoped URL."""
+
+    id: str
+    event_id: str
+    event_name: str
+    organization_id: str
+    organization_name: str
+    organization_slug: str
+    status: ContractStatus
+    invited_at: datetime
+    responded_at: datetime | None
+    appointed_at: datetime | None
+    completed_at: datetime | None
+    cancelled_at: datetime | None
+    decline_reason: str | None
+    cancel_reason: str | None
+    requirement_responses: dict[str, str | list[str]] | None

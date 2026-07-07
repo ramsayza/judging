@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch } from "@/lib/apiClient";
 import type { MembershipWithOrgRead, MeResponse } from "@/lib/types";
 
@@ -55,16 +56,24 @@ export function OrgProvider({ orgSlug, children }: { orgSlug: string; children: 
   }, [session?.apiToken, sessionStatus, orgSlug, router]);
 
   if (membership === "loading" || sessionStatus === "loading") {
-    return <p>Loading...</p>;
+    return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
   }
   if (membership === null) {
     return null;
   }
   if (membership.status === "pending") {
     return (
-      <main>
-        <h1>{membership.organization_name}</h1>
-        <p>Your request to join this organization is pending admin approval.</p>
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>{membership.organization_name}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Your request to join this organization is pending admin approval.
+            </p>
+          </CardContent>
+        </Card>
       </main>
     );
   }

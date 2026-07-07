@@ -6,7 +6,13 @@ from app.db import get_db
 from app.models.contract import Contract, ContractStatus
 from app.models.event import Event
 from app.models.membership import Membership, MembershipRole
-from app.schemas.event import EventCreate, EventRead, EventUpdate
+from app.schemas.event import (
+    EventContractRequirementsRead,
+    EventContractRequirementsUpdate,
+    EventCreate,
+    EventRead,
+    EventUpdate,
+)
 
 router = APIRouter(tags=["events"])
 
@@ -83,6 +89,46 @@ def update_event(
     db.commit()
     db.refresh(event)
     return event
+
+
+@router.get(
+    "/organizations/{org_id}/events/{event_id}/contract-requirements",
+    response_model=EventContractRequirementsRead,
+)
+def get_contract_requirements(
+    org_id: str,
+    event_id: str,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(get_current_membership),
+) -> EventContractRequirementsRead:
+    event = _get_org_event_or_404(db, org_id, event_id)
+    if membership.role == MembershipRole.judge:
+        has_contract = (
+            db.query(Contract)
+            .filter(Contract.event_id == event_id, Contract.judge_user_id == membership.user_id)
+            .first()
+        )
+        if has_contract is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "event not found")
+    return EventContractRequirementsRead(fields=event.contract_requirement_fields or [])
+
+
+@router.patch(
+    "/organizations/{org_id}/events/{event_id}/contract-requirements",
+    response_model=EventContractRequirementsRead,
+)
+def update_contract_requirements(
+    org_id: str,
+    event_id: str,
+    payload: EventContractRequirementsUpdate,
+    db: Session = Depends(get_db),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
+) -> EventContractRequirementsRead:
+    event = _get_org_event_or_404(db, org_id, event_id)
+    event.contract_requirement_fields = [field.model_dump(mode="json") for field in payload.fields]
+    db.commit()
+    db.refresh(event)
+    return EventContractRequirementsRead(fields=event.contract_requirement_fields or [])
 
 
 @router.delete("/organizations/{org_id}/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)

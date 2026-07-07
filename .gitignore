@@ -9,8 +9,9 @@ __pycache__/
 
 # node
 node_modules/
-.next/
+.next*/
 next-env.d.ts
+tsconfig.tsbuildinfo
 
 # misc
 .DS_Store

@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { apiFetch } from "@/lib/apiClient";
+import type { MeResponse } from "@/lib/types";
 
 const IS_DEV_ENVIRONMENT = process.env.NEXT_PUBLIC_ENVIRONMENT === "development";
 
@@ -10,42 +18,101 @@ export default function HomePage() {
   const { data: session, status } = useSession();
   const [devEmail, setDevEmail] = useState("");
   const [devName, setDevName] = useState("");
+  const [homeHref, setHomeHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session?.apiToken) return;
+    apiFetch("/api/v1/me", { token: session.apiToken })
+      .then((res) => res.json())
+      .then((data: MeResponse) => {
+        // Judges shouldn't have to navigate an org picker to see their own
+        // contracts -- only send people who actually manage an org there.
+        const hasOrgRole = data.memberships.some((m) => m.role === "organizer" || m.role === "admin");
+        setHomeHref(hasOrgRole ? "/onboarding" : "/contracts");
+      });
+  }, [session?.apiToken]);
 
   return (
-    <main>
-      <h1>Dog Agility Judge Portal</h1>
-      <p>Manage judging contracts and class allocations.</p>
+    <main className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Dog Agility Judge Portal</CardTitle>
+          <CardDescription>Manage judging contracts and class allocations.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {status === "loading" && <p className="text-sm text-muted-foreground">Loading...</p>}
 
-      {status === "loading" && <p>Loading...</p>}
+          {status === "unauthenticated" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Button className="w-full" onClick={() => signIn("google")}>
+                  Sign in with Google
+                </Button>
+                <Button className="w-full" variant="outline" onClick={() => signIn("facebook")}>
+                  Sign in with Facebook
+                </Button>
+              </div>
 
-      {status === "unauthenticated" && (
-        <div>
-          <button onClick={() => signIn("google")}>Sign in with Google</button>
-          <button onClick={() => signIn("facebook")}>Sign in with Facebook</button>
-
-          {IS_DEV_ENVIRONMENT && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                signIn("dev", { email: devEmail, name: devName });
-              }}
-            >
-              <h2>Dev login (development only)</h2>
-              <input placeholder="email" value={devEmail} onChange={(e) => setDevEmail(e.target.value)} required />
-              <input placeholder="name" value={devName} onChange={(e) => setDevName(e.target.value)} />
-              <button type="submit">Dev sign in</button>
-            </form>
+              {IS_DEV_ENVIRONMENT && (
+                <>
+                  <Separator />
+                  <form
+                    className="space-y-2 rounded-md border border-dashed p-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      signIn("dev", { email: devEmail, name: devName });
+                    }}
+                  >
+                    <p className="text-xs font-medium text-muted-foreground">Dev login (development only)</p>
+                    <div className="space-y-1">
+                      <Label htmlFor="dev-email">Email</Label>
+                      <Input
+                        id="dev-email"
+                        placeholder="email"
+                        value={devEmail}
+                        onChange={(e) => setDevEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="dev-name">Name</Label>
+                      <Input
+                        id="dev-name"
+                        placeholder="name"
+                        value={devName}
+                        onChange={(e) => setDevName(e.target.value)}
+                      />
+                    </div>
+                    <Button type="submit" size="sm" variant="secondary">
+                      Dev sign in
+                    </Button>
+                  </form>
+                </>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {status === "authenticated" && session?.user && (
-        <div>
-          <p>Signed in as {session.user.email}</p>
-          <Link href="/onboarding">Go to your organizations</Link>
-          <button onClick={() => signOut()}>Sign out</button>
-        </div>
-      )}
+          {status === "authenticated" && session?.user && (
+            <div className="space-y-3">
+              <p className="text-sm">
+                Signed in as <span className="font-medium">{session.user.email}</span>
+              </p>
+              {homeHref ? (
+                <Button asChild className="w-full">
+                  <Link href={homeHref}>
+                    {homeHref === "/onboarding" ? "Go to your organizations" : "Go to your contracts"}
+                  </Link>
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              )}
+              <Button className="w-full" variant="ghost" onClick={() => signOut()}>
+                Sign out
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </main>
   );
 }
