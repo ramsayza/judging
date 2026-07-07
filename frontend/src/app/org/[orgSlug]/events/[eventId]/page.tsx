@@ -25,7 +25,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
   const [board, setBoard] = useState<AllocationBoardEntry[]>([]);
 
   const [newClassName, setNewClassName] = useState("");
-  const [inviteJudgeId, setInviteJudgeId] = useState("");
+  const [inviteJudgeEmail, setInviteJudgeEmail] = useState("");
+  const [inviteJudgeName, setInviteJudgeName] = useState("");
   const [allocateClassId, setAllocateClassId] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -78,13 +79,14 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
       method: "POST",
       token: apiToken,
       orgId,
-      body: JSON.stringify({ judge_user_id: inviteJudgeId }),
+      body: JSON.stringify({ judge_email: inviteJudgeEmail, judge_name: inviteJudgeName || undefined }),
     });
     if (!res.ok) {
       setError(`Failed to invite judge: ${res.status}`);
       return;
     }
-    setInviteJudgeId("");
+    setInviteJudgeEmail("");
+    setInviteJudgeName("");
     refresh();
   }
 
@@ -195,14 +197,26 @@ export default function EventDetailPage({ params }: { params: Promise<{ eventId:
         <h2>Contracts</h2>
         {canManage && (
           <form onSubmit={inviteJudge}>
-            <select value={inviteJudgeId} onChange={(e) => setInviteJudgeId(e.target.value)} required>
-              <option value="">Select judge to invite...</option>
+            <input
+              type="email"
+              list="known-judges"
+              placeholder="Judge email"
+              value={inviteJudgeEmail}
+              onChange={(e) => setInviteJudgeEmail(e.target.value)}
+              required
+            />
+            <datalist id="known-judges">
               {judges.map((j) => (
-                <option key={j.user_id} value={j.user_id}>
-                  {j.user_name} ({j.user_email})
+                <option key={j.user_id} value={j.user_email}>
+                  {j.user_name}
                 </option>
               ))}
-            </select>
+            </datalist>
+            <input
+              placeholder="Name (only needed if new)"
+              value={inviteJudgeName}
+              onChange={(e) => setInviteJudgeName(e.target.value)}
+            />
             <button type="submit">Invite judge</button>
           </form>
         )}

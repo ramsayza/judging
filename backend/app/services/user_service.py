@@ -39,3 +39,16 @@ def get_or_create_dev_user(db: Session, *, email: str, name: str) -> User:
         db.commit()
         db.refresh(user)
     return user
+
+
+def get_or_create_judge(db: Session, *, email: str, name: str) -> tuple[User, bool]:
+    """Look up a user globally by email (users aren't scoped to an org), creating
+    one if this is the first time this club has invited them to judge."""
+    user = db.query(User).filter(User.email == email).one_or_none()
+    if user is not None:
+        return user, False
+
+    user = User(email=email, name=name)
+    db.add(user)
+    db.flush()
+    return user, True

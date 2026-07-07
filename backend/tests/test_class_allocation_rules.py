@@ -5,7 +5,7 @@ from tests.conftest import auth_header, make_class, make_event, make_membership,
 def _invite_and_accept(client, org, event, organizer, judge):
     contract_id = client.post(
         f"/api/v1/organizations/{org.id}/events/{event.id}/contracts",
-        json={"judge_user_id": judge.id},
+        json={"judge_email": judge.email, "judge_name": judge.name},
         headers=auth_header(organizer),
     ).json()["id"]
     client.post(f"/api/v1/organizations/{org.id}/contracts/{contract_id}/accept", headers=auth_header(judge))
@@ -104,7 +104,7 @@ def test_cannot_allocate_before_accepted(client, db_session):
 
     contract_id = client.post(
         f"/api/v1/organizations/{org.id}/events/{ev.id}/contracts",
-        json={"judge_user_id": judge.id},
+        json={"judge_email": judge.email, "judge_name": judge.name},
         headers=auth_header(organizer),
     ).json()["id"]
 

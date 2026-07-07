@@ -1,13 +1,48 @@
-from app.models import MembershipRole
+from app.models import Membership, MembershipRole, MembershipStatus, User
 from tests.conftest import auth_header, make_class, make_event, make_membership, make_org, make_user
 
 
 def _invite(client, org, event, organizer, judge):
     return client.post(
         f"/api/v1/organizations/{org.id}/events/{event.id}/contracts",
-        json={"judge_user_id": judge.id},
+        json={"judge_email": judge.email, "judge_name": judge.name},
         headers=auth_header(organizer),
     )
+
+
+def test_inviting_unknown_email_creates_judge_and_membership(client, db_session):
+    db = db_session
+    org = make_org(db)
+    organizer = make_user(db, "organizer@example.com")
+    make_membership(db, organizer, org, MembershipRole.organizer)
+    ev = make_event(db, org, organizer)
+    db.commit()
+
+    r = client.post(
+        f"/api/v1/organizations/{org.id}/events/{ev.id}/contracts",
+        json={"judge_email": "newjudge@example.com", "judge_name": "New Judge"},
+        headers=auth_header(organizer),
+    )
+    assert r.status_code == 201
+
+    judge = db.query(User).filter(User.email == "newjudge@example.com").one()
+    assert judge.name == "New Judge"
+    membership = (
+        db.query(Membership)
+        .filter(Membership.user_id == judge.id, Membership.organization_id == org.id)
+        .one()
+    )
+    assert membership.role == MembershipRole.judge
+    assert membership.status == MembershipStatus.active
+
+    # the newly-created judge can immediately accept -- proves the membership
+    # is active, not just present
+    contract_id = r.json()["id"]
+    r = client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/accept", headers=auth_header(judge)
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "accepted"
 
 
 def test_full_lifecycle_invitation_to_complete(client, db_session):

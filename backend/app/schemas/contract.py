@@ -25,7 +25,8 @@ class ContractRead(BaseModel):
 
 
 class ContractCreate(BaseModel):
-    judge_user_id: str
+    judge_email: str
+    judge_name: str | None = None
 
 
 class ContractActionRequest(BaseModel):

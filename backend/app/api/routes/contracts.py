@@ -10,8 +10,11 @@ from app.db import get_db
 from app.models.contract import Contract, ContractStatus
 from app.models.event import Event
 from app.models.membership import Membership, MembershipRole, MembershipStatus
+from app.models.organization import Organization
 from app.schemas.contract import ContractActionRequest, ContractCreate, ContractRead
 from app.services.contract_service import apply_action
+from app.services.email_service import send_judge_invitation_email
+from app.services.user_service import get_or_create_judge
 
 router = APIRouter(tags=["contracts"])
 
@@ -32,23 +35,32 @@ def create_contract(
     if event is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "event not found")
 
+    org = db.get(Organization, org_id)
+
+    # Judges are global (one User per email, not per org) -- if this is the
+    # first time this club has dealt with them, create the account now rather
+    # than requiring them to sign up first.
+    judge, _judge_created = get_or_create_judge(
+        db, email=payload.judge_email, name=payload.judge_name or payload.judge_email
+    )
+
     judge_membership = (
         db.query(Membership)
-        .filter(
-            Membership.user_id == payload.judge_user_id,
-            Membership.organization_id == org_id,
-            Membership.status == MembershipStatus.active,
-        )
+        .filter(Membership.user_id == judge.id, Membership.organization_id == org_id)
         .one_or_none()
     )
     if judge_membership is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "judge must have an active membership in this organization"
+        judge_membership = Membership(
+            user_id=judge.id,
+            organization_id=org_id,
+            role=MembershipRole.judge,
+            status=MembershipStatus.active,
         )
+        db.add(judge_membership)
 
     contract = Contract(
         event_id=event_id,
-        judge_user_id=payload.judge_user_id,
+        judge_user_id=judge.id,
         organization_id=org_id,
         invited_by_user_id=membership.user_id,
         invited_at=datetime.utcnow(),
@@ -62,6 +74,18 @@ def create_contract(
             status.HTTP_409_CONFLICT, "this judge already has a contract for this event"
         ) from exc
     db.refresh(contract)
+
+    send_judge_invitation_email(
+        to_email=judge.email,
+        judge_name=judge.name,
+        organization_name=org.name,
+        event_name=event.name,
+        event_start_date=event.start_date,
+        event_end_date=event.end_date,
+        org_slug=org.slug,
+        contract_id=contract.id,
+    )
+
     return contract
 
 

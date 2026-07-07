@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     backend_jwt_secret: str = "dev-backend-jwt-secret-change-me"
     internal_service_secret: str = "dev-internal-service-secret-change-me"
     cors_origins: str = "http://localhost:3000"
+    frontend_base_url: str = "http://localhost:3000"
 
     @property
     def cors_origin_list(self) -> list[str]:
