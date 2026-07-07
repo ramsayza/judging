@@ -1,0 +1,23 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time, so they
+# must be passed in as build args (e.g. `heroku container:push web --arg
+# NEXT_PUBLIC_API_BASE_URL=...,NEXT_PUBLIC_ENVIRONMENT=production`) rather than
+# just set as Heroku config vars, which only apply at container runtime.
+ARG NEXT_PUBLIC_API_BASE_URL
+ARG NEXT_PUBLIC_ENVIRONMENT
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NEXT_PUBLIC_ENVIRONMENT=${NEXT_PUBLIC_ENVIRONMENT}
+
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["sh", "-c", "next start -p ${PORT:-3000}"]

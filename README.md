@@ -16,7 +16,7 @@ within an event (a class can be co-judged by more than one judge).
 
 - **Frontend**: Next.js (App Router) + NextAuth.js (Google + Facebook OAuth)
 - **Backend**: FastAPI + SQLAlchemy + Alembic
-- **Database**: MySQL 8
+- **Database**: Postgres 16
 - **Local dev**: Docker Compose
 
 ## Roles
@@ -52,7 +52,7 @@ and an Organizer in another (see `Membership` in the data model).
    make up
    ```
 
-   This starts MySQL, runs migrations (`migrate` service, exits after
+   This starts Postgres, runs migrations (`migrate` service, exits after
    applying them), then starts the FastAPI backend on
    [localhost:8000](http://localhost:8000) and the Next.js frontend on
    [localhost:3000](http://localhost:3000).
@@ -95,6 +95,74 @@ organizer and one as a judge:
 6. Negative checks: allocating the same judge to the same class twice is
    rejected (409); a user outside the organization gets 404 (not 403) when
    trying to access its data.
+
+## Deploying to Heroku
+
+Heroku binds one public URL to one web dyno, so the backend and frontend are
+deployed as **two separate Heroku apps** that talk to each other over public
+HTTPS (there's no private network between separate Heroku apps). Both are
+deployed via Heroku Container Registry, reusing the existing Dockerfiles.
+
+### Backend (`backend/`)
+
+```bash
+heroku create agility-portal-api
+heroku addons:create heroku-postgresql:mini -a agility-portal-api
+
+heroku config:set -a agility-portal-api \
+  ENVIRONMENT=production \
+  CORS_ORIGINS=https://agility-portal-web.herokuapp.com \
+  FRONTEND_BASE_URL=https://agility-portal-web.herokuapp.com \
+  BACKEND_JWT_SECRET=<generate-a-strong-secret> \
+  INTERNAL_SERVICE_SECRET=<generate-a-strong-secret>
+# DATABASE_URL is set automatically by the heroku-postgresql add-on
+# (app/config.py rewrites its "postgres://" scheme to "postgresql+psycopg2://").
+
+cd backend
+heroku container:push web release -a agility-portal-api
+heroku container:release web release -a agility-portal-api
+```
+
+The `release` process type (`Dockerfile.release`) runs `alembic upgrade head`
+before the new `web` dyno (`Dockerfile`, binds `$PORT`) goes live — this
+replaces the `migrate` one-off container from `docker-compose.yml`.
+
+### Frontend (`frontend/`)
+
+```bash
+heroku create agility-portal-web
+
+heroku config:set -a agility-portal-web \
+  NEXTAUTH_SECRET=<generate-a-strong-secret> \
+  NEXTAUTH_URL=https://agility-portal-web.herokuapp.com \
+  GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... \
+  FACEBOOK_CLIENT_ID=... FACEBOOK_CLIENT_SECRET=... \
+  BACKEND_JWT_SECRET=<same value as the backend app> \
+  INTERNAL_SERVICE_SECRET=<same value as the backend app> \
+  API_INTERNAL_URL=https://agility-portal-api.herokuapp.com \
+  ENVIRONMENT=production NEXT_PUBLIC_ENVIRONMENT=production
+
+# Also update the Google/Facebook OAuth app redirect URIs to
+# https://agility-portal-web.herokuapp.com/api/auth/callback/{google,facebook}
+
+cd frontend
+heroku container:push web -a agility-portal-web \
+  --arg NEXT_PUBLIC_API_BASE_URL=https://agility-portal-api.herokuapp.com,NEXT_PUBLIC_ENVIRONMENT=production
+heroku container:release web -a agility-portal-web
+```
+
+`Dockerfile.web` (distinct from the dev-mode `Dockerfile` used by
+`docker-compose.yml`) runs a production `next build` and `next start`.
+`NEXT_PUBLIC_*` vars are inlined into the client bundle at build time, so they
+must be passed as `--arg` build args (not just `heroku config:set`), and
+`BACKEND_JWT_SECRET`/`INTERNAL_SERVICE_SECRET` must be identical on both apps
+(the frontend mints an HS256 JWT the backend verifies — see the auth
+architecture notes in `CLAUDE.md`). Never set `ENVIRONMENT` /
+`NEXT_PUBLIC_ENVIRONMENT` to `development` in this deployment — that gates a
+dev-only login bypass.
+
+There are no background workers, cron jobs, or websockets in this app, so no
+additional dyno types are needed beyond the two `web` processes.
 
 ## Repository layout
 

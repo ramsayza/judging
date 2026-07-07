@@ -1,17 +1,16 @@
 services:
   db:
-    image: mysql:8.0
+    image: postgres:16
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-agility_portal}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
-      MYSQL_USER: ${MYSQL_USER:-agility}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-agility}
+      POSTGRES_DB: ${POSTGRES_DB:-agility_portal}
+      POSTGRES_USER: ${POSTGRES_USER:-agility}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agility}
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-agility}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -21,7 +20,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://agility:agility@db:3306/agility_portal}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://agility:agility@db:5432/agility_portal}
     command: ["alembic", "upgrade", "head"]
     depends_on:
       db:
@@ -32,7 +31,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://agility:agility@db:3306/agility_portal}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://agility:agility@db:5432/agility_portal}
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"

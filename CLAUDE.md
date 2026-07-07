@@ -30,14 +30,14 @@ can be a Judge in one club and an Organizer in another.
 
 - **Frontend**: Next.js (App Router) + NextAuth.js (Google + Facebook OAuth)
 - **Backend**: FastAPI + SQLAlchemy + Alembic
-- **Database**: MySQL 8
+- **Database**: Postgres 16
 - **Local dev**: Docker Compose
 
 ## Commands
 
 ```bash
 cp .env.example .env       # first-time setup; see auth notes below
-make up                    # start MySQL + run migrations + start backend (8000) + frontend (3000)
+make up                    # start Postgres + run migrations + start backend (8000) + frontend (3000)
 make logs                  # tail all service logs
 make migrate               # (re-)apply migrations without starting the app
 make revision m="message"  # autogenerate a new Alembic migration
@@ -117,6 +117,6 @@ than hand-writing, so they match actual model state.
 `backend/tests/conftest.py` wraps each test in an outer transaction +
 SAVEPOINT (the standard SQLAlchemy "join a session into an external
 transaction" recipe) so that application code calling `session.commit()`
-doesn't leak data between tests. Tests hit a real MySQL instance (via
+doesn't leak data between tests. Tests hit a real Postgres instance (via
 `docker compose`), not mocks/SQLite — `make test` runs migrations first for
 this reason.
