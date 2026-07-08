@@ -1,5 +1,5 @@
 import enum
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -56,26 +56,33 @@ class EventClassRead(BaseModel):
     id: str
     event_id: str
     name: str
+    class_number: int | None
+    size: str | None
     level: str | None
     discipline: str | None
-    scheduled_time: datetime | None
+    class_date: date | None
     ring: str | None
+    ring_position: int | None
 
 
 class EventClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    size: str | None = Field(default=None, max_length=50)
     level: str | None = Field(default=None, max_length=100)
     discipline: str | None = Field(default=None, max_length=100)
-    scheduled_time: datetime | None = None
+    class_date: date | None = None
     ring: str | None = Field(default=None, max_length=100)
+    ring_position: int | None = None
 
 
 class EventClassUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    size: str | None = Field(default=None, max_length=50)
     level: str | None = Field(default=None, max_length=100)
     discipline: str | None = Field(default=None, max_length=100)
-    scheduled_time: datetime | None = None
+    class_date: date | None = None
     ring: str | None = Field(default=None, max_length=100)
+    ring_position: int | None = None
 
 
 class RequirementFieldType(str, enum.Enum):

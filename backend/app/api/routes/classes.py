@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_membership, require_role
@@ -25,7 +26,10 @@ def create_class(
     _membership: Membership = Depends(require_role(MembershipRole.organizer)),
 ) -> EventClass:
     _get_org_event_or_404(db, org_id, event_id)
-    event_class = EventClass(event_id=event_id, **payload.model_dump())
+    next_number = (
+        db.query(func.max(EventClass.class_number)).filter(EventClass.event_id == event_id).scalar() or 0
+    ) + 1
+    event_class = EventClass(event_id=event_id, class_number=next_number, **payload.model_dump())
     db.add(event_class)
     db.commit()
     db.refresh(event_class)

@@ -119,10 +119,13 @@ export interface EventClassRead {
   id: string;
   event_id: string;
   name: string;
+  class_number: number | null;
+  size: string | null;
   level: string | null;
   discipline: string | null;
-  scheduled_time: string | null;
+  class_date: string | null;
   ring: string | null;
+  ring_position: number | null;
 }
 
 export interface ReimbursementEstimate {
@@ -204,6 +207,7 @@ export interface AllocationBoardEntry {
   allocation_id: string;
   event_class_id: string;
   event_class_name: string;
+  ring: string | null;
   contract_id: string;
   judge_user_id: string;
   judge_name: string;

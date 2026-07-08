@@ -160,6 +160,50 @@ def test_allocation_blocked_until_contract_copy_signed(client, db_session):
     assert r2.status_code == 201
 
 
+def test_allocate_by_ring_covers_all_classes_in_ring(client, db_session):
+    db = db_session
+    org = make_org(db)
+    organizer = make_user(db, "organizer@example.com")
+    judge = make_user(db, "judge@example.com")
+    make_membership(db, organizer, org, MembershipRole.organizer)
+    make_membership(db, judge, org, MembershipRole.judge)
+    ev = make_event(db, org, organizer)
+    cls1 = make_class(db, ev, name="Class 1")
+    cls1.ring = "1"
+    cls2 = make_class(db, ev, name="Class 2")
+    cls2.ring = "1"
+    cls3 = make_class(db, ev, name="Class 3")
+    cls3.ring = "2"
+    db.commit()
+
+    contract_id = _invite_and_accept(client, org, ev, organizer, judge)
+
+    r = client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/allocations/by-ring",
+        json={"ring": "1"},
+        headers=auth_header(organizer),
+    )
+    assert r.status_code == 201
+    assert len(r.json()) == 2
+
+    board = client.get(
+        f"/api/v1/organizations/{org.id}/events/{ev.id}/allocations",
+        headers=auth_header(organizer),
+    ).json()
+    allocated_class_ids = {row["event_class_id"] for row in board}
+    assert cls1.id in allocated_class_ids
+    assert cls2.id in allocated_class_ids
+    assert cls3.id not in allocated_class_ids
+
+    r2 = client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/allocations/by-ring",
+        json={"ring": "1"},
+        headers=auth_header(organizer),
+    )
+    assert r2.status_code == 201
+    assert r2.json() == []
+
+
 def test_cannot_modify_allocations_on_completed_contract(client, db_session):
     db = db_session
     org = make_org(db)

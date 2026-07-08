@@ -14,6 +14,7 @@ from app.schemas.class_allocation import (
     AllocationBoardEntry,
     ClassAllocationCreate,
     ClassAllocationRead,
+    RingAllocationCreate,
 )
 from app.services.allocation_service import AllocationError, validate_can_allocate, validate_can_deallocate
 
@@ -58,6 +59,54 @@ def create_allocation(
         ) from exc
     db.refresh(allocation)
     return allocation
+
+
+@router.post(
+    "/organizations/{org_id}/contracts/{contract_id}/allocations/by-ring",
+    response_model=list[ClassAllocationRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def create_ring_allocation(
+    org_id: str,
+    contract_id: str,
+    payload: RingAllocationCreate,
+    db: Session = Depends(get_db),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
+) -> list[ClassAllocation]:
+    contract = (
+        db.query(Contract).filter(Contract.id == contract_id, Contract.organization_id == org_id).one_or_none()
+    )
+    if contract is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contract not found")
+
+    event_classes = (
+        db.query(EventClass)
+        .filter(EventClass.event_id == contract.event_id, EventClass.ring == payload.ring)
+        .all()
+    )
+    if not event_classes:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no classes found for this ring")
+
+    try:
+        validate_can_allocate(db, contract, event_classes[0])
+    except AllocationError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    existing_class_ids = {
+        row.event_class_id
+        for row in db.query(ClassAllocation.event_class_id).filter(ClassAllocation.contract_id == contract_id)
+    }
+
+    created = [
+        ClassAllocation(contract_id=contract_id, event_class_id=event_class.id)
+        for event_class in event_classes
+        if event_class.id not in existing_class_ids
+    ]
+    db.add_all(created)
+    db.commit()
+    for allocation in created:
+        db.refresh(allocation)
+    return created
 
 
 @router.delete(
@@ -118,6 +167,7 @@ def get_allocation_board(
             allocation_id=allocation.id,
             event_class_id=event_class.id,
             event_class_name=event_class.name,
+            ring=event_class.ring,
             contract_id=contract.id,
             judge_user_id=judge.id,
             judge_name=judge.name,
