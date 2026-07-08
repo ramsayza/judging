@@ -41,7 +41,7 @@ def list_memberships(
 def list_pending_memberships(
     org_id: str,
     db: Session = Depends(get_db),
-    _membership: Membership = Depends(require_role(MembershipRole.admin)),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
 ) -> list[MembershipWithUserRead]:
     rows = (
         db.query(Membership, User)
@@ -58,7 +58,7 @@ def update_membership(
     membership_id: str,
     payload: MembershipUpdate,
     db: Session = Depends(get_db),
-    _membership: Membership = Depends(require_role(MembershipRole.admin)),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
 ) -> MembershipWithUserRead:
     target = (
         db.query(Membership)
@@ -68,23 +68,26 @@ def update_membership(
     if target is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "membership not found")
 
-    would_remove_admin = target.role == MembershipRole.admin and (
-        (payload.role is not None and payload.role != MembershipRole.admin)
+    # organizer is now the org's highest-privileged role -- every org needs
+    # at least one active organizer, same safety check that used to protect
+    # the last org-admin.
+    would_remove_organizer = target.role == MembershipRole.organizer and (
+        (payload.role is not None and payload.role != MembershipRole.organizer)
         or (payload.status is not None and payload.status != MembershipStatus.active)
     )
-    if would_remove_admin:
-        other_active_admins = (
+    if would_remove_organizer:
+        other_active_organizers = (
             db.query(Membership)
             .filter(
                 Membership.organization_id == org_id,
-                Membership.role == MembershipRole.admin,
+                Membership.role == MembershipRole.organizer,
                 Membership.status == MembershipStatus.active,
                 Membership.id != target.id,
             )
             .count()
         )
-        if other_active_admins == 0:
-            raise HTTPException(status.HTTP_409_CONFLICT, "cannot demote or remove the last active admin")
+        if other_active_organizers == 0:
+            raise HTTPException(status.HTTP_409_CONFLICT, "cannot demote or remove the last active organizer")
 
     if payload.role is not None:
         target.role = payload.role

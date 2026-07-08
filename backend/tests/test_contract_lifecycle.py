@@ -58,10 +58,8 @@ def test_inviting_unknown_email_creates_judge_and_membership(client, db_session)
 def test_full_lifecycle_invitation_to_complete(client, db_session):
     db = db_session
     org = make_org(db)
-    admin = make_user(db, "admin@example.com")
     organizer = make_user(db, "organizer@example.com")
     judge = make_user(db, "judge@example.com")
-    make_membership(db, admin, org, MembershipRole.admin)
     make_membership(db, organizer, org, MembershipRole.organizer)
     make_membership(db, judge, org, MembershipRole.judge)
     ev = make_event(db, org, organizer)

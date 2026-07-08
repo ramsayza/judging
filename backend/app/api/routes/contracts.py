@@ -12,12 +12,21 @@ from app.models.event import Event
 from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import Organization
 from app.models.user import User
-from app.schemas.contract import ContractAcceptRequest, ContractActionRequest, ContractCreate, ContractRead
+from app.schemas.contract import (
+    ContractAcceptRequest,
+    ContractActionRequest,
+    ContractCopyRead,
+    ContractCreate,
+    ContractRead,
+    ReimbursementEstimate,
+)
 from app.schemas.event import RequirementField
+from app.services.contract_copy_service import get_effective_contract_copy
 from app.services.contract_service import apply_action
 from app.services.email_service import send_judge_invitation_email
+from app.services.reimbursement_service import PostcodeLookupError, estimate_reimbursement
 from app.services.requirement_service import validate_responses
-from app.services.user_service import get_or_create_judge
+from app.services.user_service import get_or_create_user_by_email
 
 router = APIRouter(tags=["contracts"])
 
@@ -47,7 +56,7 @@ def create_contract(
     # Judges are global (one User per email, not per org) -- if this is the
     # first time this club has dealt with them, create the account now rather
     # than requiring them to sign up first.
-    judge, _judge_created = get_or_create_judge(
+    judge, _judge_created = get_or_create_user_by_email(
         db, email=payload.judge_email, name=payload.judge_name or payload.judge_email
     )
 
@@ -134,6 +143,98 @@ def get_contract(
     return _to_contract_read(contract, judge)
 
 
+@router.get(
+    "/organizations/{org_id}/contracts/{contract_id}/reimbursement-estimate",
+    response_model=ReimbursementEstimate,
+)
+def get_reimbursement_estimate(
+    org_id: str,
+    contract_id: str,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(get_current_membership),
+) -> ReimbursementEstimate:
+    contract = _get_contract_or_404(db, org_id, contract_id)
+    if membership.role == MembershipRole.judge and contract.judge_user_id != membership.user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contract not found")
+
+    judge = db.get(User, contract.judge_user_id)
+    event = db.get(Event, contract.event_id)
+    if not judge.home_postcode:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "set your home postcode in Your Details to see an expense estimate",
+        )
+    if not event.venue_postcode:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "this event has no venue postcode set")
+
+    try:
+        estimate = estimate_reimbursement(
+            judge_postcode=judge.home_postcode,
+            venue_postcode=event.venue_postcode,
+            cost_per_mile=event.cost_per_mile,
+            cap=event.reimbursement_cap,
+        )
+    except PostcodeLookupError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+
+    return ReimbursementEstimate(**estimate)
+
+
+@router.get(
+    "/organizations/{org_id}/contracts/{contract_id}/contract-copy",
+    response_model=ContractCopyRead,
+)
+def get_contract_copy(
+    org_id: str,
+    contract_id: str,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(get_current_membership),
+) -> ContractCopyRead:
+    contract = _get_contract_or_404(db, org_id, contract_id)
+    if membership.role == MembershipRole.judge and contract.judge_user_id != membership.user_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "contract not found")
+
+    event = db.get(Event, contract.event_id)
+    return ContractCopyRead(
+        effective_body=get_effective_contract_copy(db, event),
+        signed_at=contract.contract_copy_signed_at,
+        signed_body=contract.contract_copy_signed_body,
+    )
+
+
+@router.post(
+    "/organizations/{org_id}/contracts/{contract_id}/sign-contract-copy",
+    response_model=ContractRead,
+)
+def sign_contract_copy(
+    org_id: str,
+    contract_id: str,
+    db: Session = Depends(get_db),
+    membership: Membership = Depends(get_current_membership),
+) -> ContractRead:
+    contract = _get_contract_or_404(db, org_id, contract_id)
+    if contract.judge_user_id != membership.user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the invited judge can sign this contract")
+    if contract.status != ContractStatus.accepted:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "contract must be accepted before signing the contract copy"
+        )
+    if contract.contract_copy_signed_at is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "contract copy already signed")
+
+    event = db.get(Event, contract.event_id)
+    # Signed exactly once, right here -- no route anywhere edits this
+    # afterwards, so this snapshot is what the judge actually agreed to even
+    # if the event/global copy text changes later.
+    contract.contract_copy_signed_at = datetime.utcnow()
+    contract.contract_copy_signed_body = get_effective_contract_copy(db, event)
+    db.commit()
+    db.refresh(contract)
+
+    judge = db.get(User, contract.judge_user_id)
+    return _to_contract_read(contract, judge)
+
+
 @router.post("/organizations/{org_id}/contracts/{contract_id}/accept", response_model=ContractRead)
 def accept_contract(
     org_id: str,
@@ -157,12 +258,28 @@ def accept_contract(
     # anywhere that updates requirement_responses after this, so this is the
     # only write these answers ever get.
     contract.requirement_responses = normalized_responses
+
+    # Reimbursement is supplementary information, not a lifecycle gate -- a
+    # missing postcode or an unreachable postcode-lookup service must never
+    # block accepting the contract, so failures here are swallowed and just
+    # leave reimbursement_estimate unset.
+    judge = db.get(User, contract.judge_user_id)
+    if judge.home_postcode and event.venue_postcode:
+        try:
+            contract.reimbursement_estimate = estimate_reimbursement(
+                judge_postcode=judge.home_postcode,
+                venue_postcode=event.venue_postcode,
+                cost_per_mile=event.cost_per_mile,
+                cap=event.reimbursement_cap,
+            )
+        except PostcodeLookupError:
+            pass
+
     try:
         contract = apply_action(db, contract, "accept", membership.user_id, reason=None)
     except ContractTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
-    judge = db.get(User, contract.judge_user_id)
     return _to_contract_read(contract, judge)
 
 
@@ -253,6 +370,11 @@ def _to_contract_read(contract: Contract, judge: User) -> ContractRead:
         cancel_reason=contract.cancel_reason,
         notes=contract.notes,
         requirement_responses=contract.requirement_responses,
+        reimbursement_estimate=(
+            ReimbursementEstimate(**contract.reimbursement_estimate) if contract.reimbursement_estimate else None
+        ),
+        contract_copy_signed_at=contract.contract_copy_signed_at,
+        contract_copy_signed_body=contract.contract_copy_signed_body,
     )
 
 

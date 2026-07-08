@@ -12,13 +12,12 @@ from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
-# A role requirement of "organizer" is also satisfied by "admin" (admin is a
-# superset of organizer within an org). "judge" and "admin" requirements are
-# not implied by any other role.
+# organizer is the highest-privileged role within an org (there is no more
+# in-org "admin" -- that's now a separate, global, non-org-scoped privilege;
+# see get_current_platform_admin below). Neither role is implied by the other.
 ROLE_IMPLIES: dict[MembershipRole, set[MembershipRole]] = {
     MembershipRole.judge: {MembershipRole.judge},
-    MembershipRole.organizer: {MembershipRole.organizer, MembershipRole.admin},
-    MembershipRole.admin: {MembershipRole.admin},
+    MembershipRole.organizer: {MembershipRole.organizer},
 }
 
 
@@ -37,6 +36,17 @@ def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
     return user
+
+
+def get_current_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Gate for the small set of genuinely global, non-org-scoped admin
+    routes (rule-set contract copies, org creation, listing all orgs). This
+    is deliberately never mixed into get_current_membership/require_role --
+    platform admin grants no automatic access to any individual org's
+    members/events/contracts."""
+    if not current_user.is_platform_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "platform admin only")
+    return current_user
 
 
 def get_current_membership(

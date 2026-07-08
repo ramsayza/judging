@@ -108,7 +108,6 @@ function MembersPageContent() {
                       <SelectContent>
                         <SelectItem value="judge">judge</SelectItem>
                         <SelectItem value="organizer">organizer</SelectItem>
-                        <SelectItem value="admin">admin</SelectItem>
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -129,7 +128,7 @@ function MembersPageContent() {
 
 export default function MembersPage() {
   return (
-    <RoleGate allow={["admin"]}>
+    <RoleGate allow={["organizer"]}>
       <MembersPageContent />
     </RoleGate>
   );

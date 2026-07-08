@@ -13,7 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/apiClient";
-import type { ClassRestriction, ClassRestrictionOptions, MeResponse, UserDetailsRead } from "@/lib/types";
+import type {
+  ClassRestriction,
+  ClassRestrictionOptions,
+  EventRuleSet,
+  MeResponse,
+  UserDetailsRead,
+} from "@/lib/types";
+
+const RULE_SETS: EventRuleSet[] = ["RKC", "Nexus", "IFCS", "A4A", "Independent"];
 
 function restrictionLabel(r: ClassRestriction): string {
   return [r.discipline, r.level].filter(Boolean).join(" ");
@@ -31,6 +39,7 @@ export default function ProfilePage() {
   const [restrictions, setRestrictions] = useState<ClassRestriction[]>([]);
   const [newDiscipline, setNewDiscipline] = useState("");
   const [newLevel, setNewLevel] = useState("");
+  const [qualifiedDates, setQualifiedDates] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,6 +57,9 @@ export default function ProfilePage() {
         setDetails(data);
         setHomePostcode(data.home_postcode ?? "");
         setRestrictions(data.class_restrictions);
+        setQualifiedDates(
+          Object.fromEntries(data.rule_set_qualifications.map((q) => [q.rule_set, q.qualified_date]))
+        );
       });
   }, [apiToken]);
 
@@ -81,6 +93,10 @@ export default function ProfilePage() {
       body: JSON.stringify({
         home_postcode: homePostcode || null,
         class_restrictions: restrictions,
+        rule_set_qualifications: RULE_SETS.filter((rs) => qualifiedDates[rs]).map((rs) => ({
+          rule_set: rs,
+          qualified_date: qualifiedDates[rs],
+        })),
       }),
     });
     if (!res.ok) {
@@ -180,6 +196,23 @@ export default function ProfilePage() {
                   <Button type="button" variant="outline" onClick={addRestriction}>
                     Add restriction
                   </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Rule set qualification dates</Label>
+                <div className="space-y-2">
+                  {RULE_SETS.map((rs) => (
+                    <div key={rs} className="flex items-center gap-3">
+                      <span className="w-24 text-sm">{rs}</span>
+                      <Input
+                        type="date"
+                        className="max-w-xs"
+                        value={qualifiedDates[rs] ?? ""}
+                        onChange={(e) => setQualifiedDates({ ...qualifiedDates, [rs]: e.target.value })}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
 

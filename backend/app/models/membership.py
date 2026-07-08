@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 class MembershipRole(str, enum.Enum):
     judge = "judge"
     organizer = "organizer"
-    admin = "admin"
 
 
 class MembershipStatus(str, enum.Enum):

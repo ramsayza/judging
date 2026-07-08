@@ -41,9 +41,11 @@ def get_or_create_dev_user(db: Session, *, email: str, name: str) -> User:
     return user
 
 
-def get_or_create_judge(db: Session, *, email: str, name: str) -> tuple[User, bool]:
+def get_or_create_user_by_email(db: Session, *, email: str, name: str) -> tuple[User, bool]:
     """Look up a user globally by email (users aren't scoped to an org), creating
-    one if this is the first time this club has invited them to judge."""
+    one if this is the first time anyone's referenced them by email -- used both
+    when inviting a judge and when a platform admin names an org's initial
+    organizer."""
     user = db.query(User).filter(User.email == email).one_or_none()
     if user is not None:
         return user, False

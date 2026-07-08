@@ -5,6 +5,22 @@ from pydantic import BaseModel, ConfigDict
 from app.models.contract import ContractStatus
 
 
+class ReimbursementEstimate(BaseModel):
+    miles_one_way: float
+    miles_return: float
+    rate_per_mile: str
+    cap: str | None
+    amount: str
+    judge_postcode: str
+    venue_postcode: str
+
+
+class ContractCopyRead(BaseModel):
+    effective_body: str
+    signed_at: datetime | None
+    signed_body: str | None
+
+
 class ContractRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,6 +41,9 @@ class ContractRead(BaseModel):
     cancel_reason: str | None
     notes: str | None
     requirement_responses: dict[str, str | list[str]] | None
+    reimbursement_estimate: ReimbursementEstimate | None
+    contract_copy_signed_at: datetime | None
+    contract_copy_signed_body: str | None
 
 
 class ContractCreate(BaseModel):
@@ -62,3 +81,6 @@ class MyContractRead(BaseModel):
     decline_reason: str | None
     cancel_reason: str | None
     requirement_responses: dict[str, str | list[str]] | None
+    reimbursement_estimate: ReimbursementEstimate | None
+    contract_copy_signed_at: datetime | None
+    contract_copy_signed_body: str | None

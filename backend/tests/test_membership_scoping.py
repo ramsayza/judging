@@ -47,22 +47,9 @@ def test_judge_role_cannot_create_events(client, db_session):
     assert r.status_code == 403
 
 
-def test_admin_role_satisfies_organizer_requirement(client, db_session):
-    db = db_session
-    org = make_org(db)
-    admin = make_user(db, "admin@example.com")
-    make_membership(db, admin, org, MembershipRole.admin)
-    db.commit()
-
-    r = client.post(
-        f"/api/v1/organizations/{org.id}/events",
-        json={"name": "Admin-created event", "start_date": "2026-01-01", "end_date": "2026-01-02"},
-        headers=auth_header(admin),
-    )
-    assert r.status_code == 201
-
-
-def test_organizer_role_does_not_satisfy_admin_requirement(client, db_session):
+def test_organizer_can_update_organization(client, db_session):
+    # organizer is now the org's highest-privileged role -- what used to
+    # require a separate org-admin now just requires organizer.
     db = db_session
     org = make_org(db)
     organizer = make_user(db, "organizer@example.com")
@@ -71,6 +58,20 @@ def test_organizer_role_does_not_satisfy_admin_requirement(client, db_session):
 
     r = client.patch(
         f"/api/v1/organizations/{org.id}", json={"name": "New name"}, headers=auth_header(organizer)
+    )
+    assert r.status_code == 200
+    assert r.json()["name"] == "New name"
+
+
+def test_judge_cannot_update_organization(client, db_session):
+    db = db_session
+    org = make_org(db)
+    judge = make_user(db, "judge@example.com")
+    make_membership(db, judge, org, MembershipRole.judge)
+    db.commit()
+
+    r = client.patch(
+        f"/api/v1/organizations/{org.id}", json={"name": "New name"}, headers=auth_header(judge)
     )
     assert r.status_code == 403
 

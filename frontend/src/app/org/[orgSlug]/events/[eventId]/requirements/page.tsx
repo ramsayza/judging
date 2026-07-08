@@ -239,7 +239,7 @@ function RequirementsPageContent({ eventId }: { eventId: string }) {
 export default function RequirementsPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
   return (
-    <RoleGate allow={["organizer", "admin"]}>
+    <RoleGate allow={["organizer"]}>
       <RequirementsPageContent eventId={eventId} />
     </RoleGate>
   );

@@ -1,4 +1,4 @@
-.PHONY: up down build clean logs migrate revision seed test
+.PHONY: up down build clean destroy logs migrate revision seed test
 
 up:
 	docker compose up
@@ -17,6 +17,13 @@ clean:
 	docker compose down
 	docker volume rm -f $$(docker volume ls -q --filter name=frontend_node_modules) 2>/dev/null || true
 	docker compose build
+
+
+# Wipes containers, networks, AND every named volume (db_data,
+# frontend_node_modules) -- destroys all DB data. Use before a clean
+# end-to-end test run. Follow with `make up && make seed` to rebuild fresh.
+destroy:
+	docker compose down -v --remove-orphans
 
 logs:
 	docker compose logs -f

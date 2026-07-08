@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_membership, get_current_user, require_role
+from app.api.deps import get_current_membership, get_current_platform_admin, get_current_user, require_role
 from app.db import get_db
 from app.models.membership import Membership, MembershipRole, MembershipStatus
 from app.models.organization import JoinPolicy, Organization
@@ -22,6 +22,7 @@ from app.services.email_service import (
     DEFAULT_INVITATION_SUBJECT_TEMPLATE,
     validate_template,
 )
+from app.services.user_service import get_or_create_user_by_email
 
 router = APIRouter(tags=["organizations"])
 
@@ -29,7 +30,7 @@ router = APIRouter(tags=["organizations"])
 @router.post("/onboarding/organizations", response_model=OrganizationRead, status_code=status.HTTP_201_CREATED)
 def create_organization(
     payload: OrganizationCreate,
-    current_user: User = Depends(get_current_user),
+    _current_user: User = Depends(get_current_platform_admin),
     db: Session = Depends(get_db),
 ) -> Organization:
     org = Organization(name=payload.name, slug=payload.slug)
@@ -40,11 +41,17 @@ def create_organization(
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "an organization with this slug already exists") from exc
 
+    # The platform admin provisions the org but isn't a member of it themselves
+    # -- they name who the initial organizer is, same "invite a global User by
+    # email" pattern already used for judges.
+    organizer, _created = get_or_create_user_by_email(
+        db, email=payload.organizer_email, name=payload.organizer_name or payload.organizer_email
+    )
     db.add(
         Membership(
-            user_id=current_user.id,
+            user_id=organizer.id,
             organization_id=org.id,
-            role=MembershipRole.admin,
+            role=MembershipRole.organizer,
             status=MembershipStatus.active,
         )
     )
@@ -110,7 +117,7 @@ def update_organization(
     org_id: str,
     payload: OrganizationUpdate,
     db: Session = Depends(get_db),
-    _membership: Membership = Depends(require_role(MembershipRole.admin)),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
 ) -> Organization:
     org = db.get(Organization, org_id)
     if org is None:

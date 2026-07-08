@@ -1,9 +1,10 @@
 import enum
 from datetime import date, datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.event import EventStatus
+from app.models.event import EventRuleSet, EventStatus
 
 
 class EventRead(BaseModel):
@@ -13,6 +14,11 @@ class EventRead(BaseModel):
     organization_id: str
     name: str
     venue: str | None
+    venue_postcode: str | None
+    rule_set: EventRuleSet | None
+    cost_per_mile: Decimal
+    reimbursement_cap: Decimal | None
+    contract_copy_override: str | None
     start_date: date
     end_date: date
     status: EventStatus
@@ -22,6 +28,11 @@ class EventRead(BaseModel):
 class EventCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     venue: str | None = Field(default=None, max_length=255)
+    venue_postcode: str | None = Field(default=None, max_length=20)
+    rule_set: EventRuleSet | None = None
+    cost_per_mile: Decimal = Field(default=Decimal("0.55"))
+    reimbursement_cap: Decimal | None = None
+    contract_copy_override: str | None = None
     start_date: date
     end_date: date
 
@@ -29,6 +40,11 @@ class EventCreate(BaseModel):
 class EventUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     venue: str | None = Field(default=None, max_length=255)
+    venue_postcode: str | None = Field(default=None, max_length=20)
+    rule_set: EventRuleSet | None = None
+    cost_per_mile: Decimal | None = None
+    reimbursement_cap: Decimal | None = None
+    contract_copy_override: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     status: EventStatus | None = None

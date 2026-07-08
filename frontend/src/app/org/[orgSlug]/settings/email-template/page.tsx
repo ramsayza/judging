@@ -115,7 +115,7 @@ function EmailTemplateSettingsPageContent() {
 
 export default function EmailTemplateSettingsPage() {
   return (
-    <RoleGate allow={["organizer", "admin"]}>
+    <RoleGate allow={["organizer"]}>
       <EmailTemplateSettingsPageContent />
     </RoleGate>
   );

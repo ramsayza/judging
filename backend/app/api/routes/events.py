@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_membership, require_role
 from app.db import get_db
 from app.models.contract import Contract, ContractStatus
-from app.models.event import Event
+from app.models.event import Event, EventStatus
 from app.models.membership import Membership, MembershipRole
 from app.schemas.event import (
     EventContractRequirementsRead,
@@ -32,6 +32,11 @@ def create_event(
         organization_id=org_id,
         name=payload.name,
         venue=payload.venue,
+        venue_postcode=payload.venue_postcode,
+        rule_set=payload.rule_set,
+        cost_per_mile=payload.cost_per_mile,
+        reimbursement_cap=payload.reimbursement_cap,
+        contract_copy_override=payload.contract_copy_override,
         start_date=payload.start_date,
         end_date=payload.end_date,
         created_by_user_id=membership.user_id,
@@ -45,10 +50,13 @@ def create_event(
 @router.get("/organizations/{org_id}/events", response_model=list[EventRead])
 def list_events(
     org_id: str,
+    include_archived: bool = Query(default=False),
     db: Session = Depends(get_db),
     membership: Membership = Depends(get_current_membership),
 ) -> list[Event]:
     query = db.query(Event).filter(Event.organization_id == org_id)
+    if not include_archived:
+        query = query.filter(Event.status != EventStatus.archived)
     if membership.role == MembershipRole.judge:
         query = query.join(Contract, Contract.event_id == Event.id).filter(
             Contract.judge_user_id == membership.user_id
@@ -136,7 +144,7 @@ def delete_event(
     org_id: str,
     event_id: str,
     db: Session = Depends(get_db),
-    _membership: Membership = Depends(require_role(MembershipRole.admin)),
+    _membership: Membership = Depends(require_role(MembershipRole.organizer)),
 ) -> None:
     event = _get_org_event_or_404(db, org_id, event_id)
     active_contract = (

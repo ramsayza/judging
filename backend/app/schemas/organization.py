@@ -15,6 +15,8 @@ class OrganizationRead(BaseModel):
 class OrganizationCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     slug: str = Field(min_length=1, max_length=255, pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$")
+    organizer_email: str
+    organizer_name: str | None = None
 
 
 class OrganizationUpdate(BaseModel):

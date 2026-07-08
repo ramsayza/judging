@@ -11,6 +11,7 @@ const STATUS_MAP: Record<string, { label: string; variant: BadgeProps["variant"]
   draft: { label: "Draft", variant: "outline" },
   published: { label: "Published", variant: "default" },
   completed: { label: "Completed", variant: "success" },
+  archived: { label: "Archived", variant: "outline" },
   // shared / membership statuses
   cancelled: { label: "Cancelled", variant: "destructive" },
   pending: { label: "Pending", variant: "warning" },

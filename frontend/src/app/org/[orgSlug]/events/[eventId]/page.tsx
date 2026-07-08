@@ -17,6 +17,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
 import type {
   AllocationBoardEntry,
+  ContractCopyRead,
   ContractRead,
   EventClassRead,
   EventContractRequirementsRead,
@@ -26,7 +27,7 @@ import type {
 
 function EventDetailPageContent({ eventId }: { eventId: string }) {
   const { orgId, orgSlug, role, apiToken } = useOrgContext();
-  const canManage = role === "organizer" || role === "admin";
+  const canManage = role === "organizer";
 
   const [event, setEvent] = useState<EventRead | null>(null);
   const [classes, setClasses] = useState<EventClassRead[]>([]);
@@ -34,6 +35,7 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
   const [judges, setJudges] = useState<MembershipWithUserRead[]>([]);
   const [board, setBoard] = useState<AllocationBoardEntry[]>([]);
   const [requirementFieldsCount, setRequirementFieldsCount] = useState<number | null>(null);
+  const [contractCopies, setContractCopies] = useState<Record<string, ContractCopyRead>>({});
 
   const [newClassName, setNewClassName] = useState("");
   const [inviteJudgeEmail, setInviteJudgeEmail] = useState("");
@@ -68,6 +70,16 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const accepted = contracts.filter((c) => c.status === "accepted");
+    accepted.forEach((c) => {
+      apiFetch(`/api/v1/organizations/${orgId}/contracts/${c.id}/contract-copy`, { token: apiToken, orgId })
+        .then((res) => res.json())
+        .then((data: ContractCopyRead) => setContractCopies((prev) => ({ ...prev, [c.id]: data })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, apiToken, contracts]);
 
   async function addClass(e: React.FormEvent) {
     e.preventDefault();
@@ -149,6 +161,21 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
     refresh();
   }
 
+  async function archiveEvent() {
+    setError(null);
+    const res = await apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}`, {
+      method: "PATCH",
+      token: apiToken,
+      orgId,
+      body: JSON.stringify({ status: "archived" }),
+    });
+    if (!res.ok) {
+      setError(`Failed to archive event: ${res.status}`);
+      return;
+    }
+    refresh();
+  }
+
   if (!event) return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
 
   const allocatableContracts = contracts.filter((c) => c.status === "accepted" || c.status === "appointed");
@@ -157,13 +184,23 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
     <main className="space-y-6">
       <PageHeader
         title={event.name}
-        description={`${event.venue ?? "No venue set"} — ${event.start_date} to ${event.end_date}`}
+        description={`${event.venue ?? "No venue set"}${event.venue_postcode ? ` (${event.venue_postcode})` : ""} — ${event.start_date} to ${event.end_date}${event.rule_set ? ` — ${event.rule_set}` : ""} — £${event.cost_per_mile}/mile${event.reimbursement_cap ? ` (capped at £${event.reimbursement_cap})` : ""}`}
         action={
           <div className="flex items-center gap-3">
             {canManage && (
-              <Button asChild size="sm" variant="outline">
-                <Link href={`/org/${orgSlug}/events/${eventId}/requirements`}>Judging requirements</Link>
-              </Button>
+              <>
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/org/${orgSlug}/events/${eventId}/edit`}>Edit event</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/org/${orgSlug}/events/${eventId}/requirements`}>Judging requirements</Link>
+                </Button>
+                {event.status !== "archived" && (
+                  <Button size="sm" variant="destructive" onClick={archiveEvent}>
+                    Archive event
+                  </Button>
+                )}
+              </>
             )}
             <StatusBadge status={event.status} />
           </div>
@@ -297,9 +334,18 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
                   </TableCell>
                   <TableCell className="space-x-2 text-right">
                     {canManage && c.status === "accepted" && (
-                      <Button size="sm" onClick={() => contractAction(c.id, "appoint")}>
-                        Appoint
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={!!contractCopies[c.id]?.effective_body && !contractCopies[c.id]?.signed_at}
+                          onClick={() => contractAction(c.id, "appoint")}
+                        >
+                          Appoint
+                        </Button>
+                        {contractCopies[c.id]?.effective_body && !contractCopies[c.id]?.signed_at && (
+                          <span className="text-xs text-muted-foreground">Waiting for judge to sign</span>
+                        )}
+                      </>
                     )}
                     {canManage && c.status === "appointed" && (
                       <Button size="sm" onClick={() => contractAction(c.id, "complete")}>
@@ -326,7 +372,7 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
 export default function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
   return (
-    <RoleGate allow={["organizer", "admin"]}>
+    <RoleGate allow={["organizer"]}>
       <EventDetailPageContent eventId={eventId} />
     </RoleGate>
   );

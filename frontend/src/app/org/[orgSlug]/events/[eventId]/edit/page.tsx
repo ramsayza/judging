@@ -1,7 +1,7 @@
 "use client";
 
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { RoleGate } from "@/components/RoleGate";
@@ -13,14 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
-import type { EventRuleSet } from "@/lib/types";
+import type { EventRead, EventRuleSet, EventStatus } from "@/lib/types";
 
 const RULE_SETS: EventRuleSet[] = ["RKC", "Nexus", "IFCS", "A4A", "Independent"];
+const STATUSES: EventStatus[] = ["draft", "published", "completed", "cancelled", "archived"];
 
-function NewEventPageContent() {
+function EditEventPageContent({ eventId }: { eventId: string }) {
   const { orgId, orgSlug, apiToken } = useOrgContext();
   const router = useRouter();
 
+  const [event, setEvent] = useState<EventRead | null>(null);
   const [name, setName] = useState("");
   const [venue, setVenue] = useState("");
   const [venuePostcode, setVenuePostcode] = useState("");
@@ -28,15 +30,34 @@ function NewEventPageContent() {
   const [costPerMile, setCostPerMile] = useState("0.55");
   const [reimbursementCap, setReimbursementCap] = useState("");
   const [contractCopyOverride, setContractCopyOverride] = useState("");
+  const [eventStatus, setEventStatus] = useState<EventStatus>("draft");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}`, { token: apiToken, orgId })
+      .then((res) => res.json())
+      .then((data: EventRead) => {
+        setEvent(data);
+        setName(data.name);
+        setVenue(data.venue ?? "");
+        setVenuePostcode(data.venue_postcode ?? "");
+        setRuleSet(data.rule_set ?? "");
+        setCostPerMile(String(data.cost_per_mile));
+        setReimbursementCap(data.reimbursement_cap === null ? "" : String(data.reimbursement_cap));
+        setContractCopyOverride(data.contract_copy_override ?? "");
+        setEventStatus(data.status);
+        setStartDate(data.start_date);
+        setEndDate(data.end_date);
+      });
+  }, [orgId, apiToken, eventId]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const res = await apiFetch(`/api/v1/organizations/${orgId}/events`, {
-      method: "POST",
+    const res = await apiFetch(`/api/v1/organizations/${orgId}/events/${eventId}`, {
+      method: "PATCH",
       token: apiToken,
       orgId,
       body: JSON.stringify({
@@ -49,19 +70,21 @@ function NewEventPageContent() {
         contract_copy_override: contractCopyOverride || null,
         start_date: startDate,
         end_date: endDate,
+        status: eventStatus,
       }),
     });
     if (!res.ok) {
-      setError(`Failed to create event: ${res.status}`);
+      setError(`Failed to save: ${res.status}`);
       return;
     }
-    const event = await res.json();
-    router.replace(`/org/${orgSlug}/events/${event.id}`);
+    router.replace(`/org/${orgSlug}/events/${eventId}`);
   }
+
+  if (!event) return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
 
   return (
     <main className="mx-auto max-w-md">
-      <PageHeader title="New event" />
+      <PageHeader title="Edit event" />
       <Card>
         <CardContent className="pt-6">
           {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
@@ -149,7 +172,22 @@ function NewEventPageContent() {
                 onChange={(e) => setContractCopyOverride(e.target.value)}
               />
             </div>
-            <Button type="submit">Create event</Button>
+            <div className="space-y-1">
+              <Label htmlFor="event-status">Status</Label>
+              <Select value={eventStatus} onValueChange={(value) => setEventStatus(value as EventStatus)}>
+                <SelectTrigger id="event-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit">Save changes</Button>
           </form>
         </CardContent>
       </Card>
@@ -157,10 +195,11 @@ function NewEventPageContent() {
   );
 }
 
-export default function NewEventPage() {
+export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
+  const { eventId } = use(params);
   return (
     <RoleGate allow={["organizer"]}>
-      <NewEventPageContent />
+      <EditEventPageContent eventId={eventId} />
     </RoleGate>
   );
 }

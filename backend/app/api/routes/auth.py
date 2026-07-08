@@ -12,7 +12,7 @@ from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
 from app.schemas.auth import MeResponse
-from app.schemas.contract import MyContractRead
+from app.schemas.contract import MyContractRead, ReimbursementEstimate
 from app.schemas.membership import MembershipWithOrgRead
 from app.schemas.user import (
     ClassRestrictionOptions,
@@ -102,6 +102,11 @@ def _my_contract_read(contract: Contract, event: Event, org: Organization) -> My
         decline_reason=contract.decline_reason,
         cancel_reason=contract.cancel_reason,
         requirement_responses=contract.requirement_responses,
+        reimbursement_estimate=(
+            ReimbursementEstimate(**contract.reimbursement_estimate) if contract.reimbursement_estimate else None
+        ),
+        contract_copy_signed_at=contract.contract_copy_signed_at,
+        contract_copy_signed_body=contract.contract_copy_signed_body,
     )
 
 
@@ -145,8 +150,10 @@ def _user_details_read(user: User) -> UserDetailsRead:
         email=user.email,
         name=user.name,
         avatar_url=user.avatar_url,
+        is_platform_admin=user.is_platform_admin,
         home_postcode=user.home_postcode,
         class_restrictions=user.class_restrictions or [],
+        rule_set_qualifications=user.rule_set_qualifications or [],
     )
 
 
@@ -163,6 +170,7 @@ def update_my_details(
 ) -> UserDetailsRead:
     current_user.home_postcode = payload.home_postcode
     current_user.class_restrictions = [r.model_dump(mode="json") for r in payload.class_restrictions]
+    current_user.rule_set_qualifications = [q.model_dump(mode="json") for q in payload.rule_set_qualifications]
     db.commit()
     db.refresh(current_user)
     return _user_details_read(current_user)

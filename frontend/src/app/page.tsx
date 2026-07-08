@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/lib/apiClient";
-import type { MeResponse } from "@/lib/types";
+import type { MeResponse, MyContractRead } from "@/lib/types";
 
 const IS_DEV_ENVIRONMENT = process.env.NEXT_PUBLIC_ENVIRONMENT === "development";
 
@@ -22,14 +22,23 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!session?.apiToken) return;
-    apiFetch("/api/v1/me", { token: session.apiToken })
-      .then((res) => res.json())
-      .then((data: MeResponse) => {
-        // Judges shouldn't have to navigate an org picker to see their own
-        // contracts -- only send people who actually manage an org there.
-        const hasOrgRole = data.memberships.some((m) => m.role === "organizer" || m.role === "admin");
-        setHomeHref(hasOrgRole ? "/onboarding" : "/contracts");
-      });
+    Promise.all([
+      apiFetch("/api/v1/me", { token: session.apiToken }).then((res) => res.json() as Promise<MeResponse>),
+      apiFetch("/api/v1/me/contracts", { token: session.apiToken }).then(
+        (res) => res.json() as Promise<MyContractRead[]>
+      ),
+    ]).then(([me, contracts]) => {
+      // A pending invitation is the most urgent thing a signed-in user can
+      // have waiting -- surface it immediately rather than making them dig
+      // through an org picker first, even if they also manage an org.
+      const hasPendingInvitation = contracts.some((c) => c.status === "invitation");
+      if (hasPendingInvitation) {
+        setHomeHref("/contracts");
+        return;
+      }
+      const hasOrgRole = me.memberships.some((m) => m.role === "organizer");
+      setHomeHref(hasOrgRole ? "/onboarding" : "/contracts");
+    });
   }, [session?.apiToken]);
 
   return (

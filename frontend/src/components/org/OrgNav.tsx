@@ -10,11 +10,11 @@ import { useOrgContext } from "@/lib/org-context";
 import type { MembershipRole } from "@/lib/types";
 
 const NAV_ITEMS: { href: string; label: string; allow: MembershipRole[] }[] = [
-  { href: "dashboard", label: "Dashboard", allow: ["judge", "organizer", "admin"] },
-  { href: "events", label: "Events", allow: ["organizer", "admin"] },
-  { href: "contracts", label: "Contracts", allow: ["judge", "organizer", "admin"] },
-  { href: "members", label: "Members", allow: ["admin"] },
-  { href: "settings/email-template", label: "Settings", allow: ["organizer", "admin"] },
+  { href: "dashboard", label: "Dashboard", allow: ["judge", "organizer"] },
+  { href: "events", label: "Events", allow: ["organizer"] },
+  { href: "contracts", label: "Contracts", allow: ["judge", "organizer"] },
+  { href: "members", label: "Members", allow: ["organizer"] },
+  { href: "settings/email-template", label: "Settings", allow: ["organizer"] },
 ];
 
 export function OrgNav({ orgSlug }: { orgSlug: string }) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,7 +14,14 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
-import type { ContractRead, EventContractRequirementsRead, EventRead, RequirementField } from "@/lib/types";
+import type {
+  ContractCopyRead,
+  ContractRead,
+  EventContractRequirementsRead,
+  EventRead,
+  ReimbursementEstimate,
+  RequirementField,
+} from "@/lib/types";
 
 const LIFECYCLE_STEPS: { status: string; label: string }[] = [
   { status: "invitation", label: "Invited" },
@@ -36,7 +44,10 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
   const [responses, setResponses] = useState<Record<string, string | string[]>>({});
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const canManage = role === "organizer" || role === "admin";
+  const [reimbursementEstimate, setReimbursementEstimate] = useState<ReimbursementEstimate | null>(null);
+  const [reimbursementError, setReimbursementError] = useState<string | null>(null);
+  const [contractCopy, setContractCopy] = useState<ContractCopyRead | null>(null);
+  const canManage = role === "organizer";
 
   const refresh = useCallback(() => {
     apiFetch(`/api/v1/organizations/${orgId}/contracts/${contractId}`, { token: apiToken, orgId })
@@ -60,6 +71,32 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
       .then((res) => res.json())
       .then((data: EventContractRequirementsRead) => setRequirementFields(data.fields));
   }, [orgId, apiToken, contract]);
+
+  useEffect(() => {
+    if (!contract || contract.status !== "invitation") return;
+    setReimbursementError(null);
+    apiFetch(`/api/v1/organizations/${orgId}/contracts/${contractId}/reimbursement-estimate`, {
+      token: apiToken,
+      orgId,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setReimbursementError(body?.detail ?? "Couldn't calculate an expense estimate right now.");
+        return;
+      }
+      setReimbursementEstimate(await res.json());
+    });
+  }, [orgId, apiToken, contract, contractId]);
+
+  useEffect(() => {
+    if (!contract || contract.status !== "accepted") return;
+    apiFetch(`/api/v1/organizations/${orgId}/contracts/${contractId}/contract-copy`, {
+      token: apiToken,
+      orgId,
+    })
+      .then((res) => res.json())
+      .then(setContractCopy);
+  }, [orgId, apiToken, contract, contractId]);
 
   function updateResponse(key: string, value: string) {
     setResponses((prev) => ({ ...prev, [key]: value }));
@@ -99,6 +136,21 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       setError(`Failed to accept: ${body?.detail ?? res.status}`);
+      return;
+    }
+    refresh();
+  }
+
+  async function signContractCopy() {
+    setError(null);
+    const res = await apiFetch(`/api/v1/organizations/${orgId}/contracts/${contractId}/sign-contract-copy`, {
+      method: "POST",
+      token: apiToken,
+      orgId,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setError(`Failed to sign: ${body?.detail ?? res.status}`);
       return;
     }
     refresh();
@@ -156,6 +208,68 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
             <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
               Cancel reason: {contract.cancel_reason}
             </p>
+          )}
+
+          {contract.reimbursement_estimate && (
+            <div className="rounded-md border p-4 text-sm">
+              <p className="font-medium">Reimbursement (at acceptance)</p>
+              <p className="text-muted-foreground">
+                £{contract.reimbursement_estimate.amount} for an estimated{" "}
+                {contract.reimbursement_estimate.miles_return} miles return (£
+                {contract.reimbursement_estimate.rate_per_mile}/mile
+                {contract.reimbursement_estimate.cap ? ", capped" : ""})
+              </p>
+            </div>
+          )}
+
+          {contract.status === "invitation" && (
+            <div className="rounded-md border p-4 text-sm">
+              <p className="font-medium">Estimated expenses</p>
+              {reimbursementEstimate && (
+                <p className="text-muted-foreground">
+                  £{reimbursementEstimate.amount} for an estimated {reimbursementEstimate.miles_return} miles return
+                  (£{reimbursementEstimate.rate_per_mile}/mile{reimbursementEstimate.cap ? ", capped" : ""}) — straight-line
+                  estimate, not exact road mileage.
+                </p>
+              )}
+              {reimbursementError && (
+                <p className="text-muted-foreground">
+                  {reimbursementError}
+                  {role === "judge" && reimbursementError.includes("home postcode") && (
+                    <>
+                      {" "}
+                      <Link href="/profile" className="underline">
+                        Set it in Your Details
+                      </Link>
+                      .
+                    </>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+
+          {contract.contract_copy_signed_at && (
+            <div className="space-y-2 rounded-md border p-4">
+              <p className="text-sm font-medium">
+                Contract signed on {new Date(contract.contract_copy_signed_at).toLocaleDateString()}
+              </p>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {contract.contract_copy_signed_body}
+              </p>
+            </div>
+          )}
+
+          {contract.status === "accepted" && !contract.contract_copy_signed_at && contractCopy?.effective_body && (
+            <div className="space-y-3 rounded-md border p-4">
+              <p className="text-sm font-medium">Contract to sign</p>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{contractCopy.effective_body}</p>
+              {role === "judge" && (
+                <Button size="sm" onClick={signContractCopy}>
+                  Sign contract
+                </Button>
+              )}
+            </div>
           )}
 
           {contract.requirement_responses && (
@@ -252,7 +366,19 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
               </>
             )}
 
-            {canManage && contract.status === "accepted" && <Button onClick={() => act("appoint")}>Appoint</Button>}
+            {canManage && contract.status === "accepted" && (
+              <>
+                <Button
+                  disabled={!!contractCopy?.effective_body && !contract.contract_copy_signed_at}
+                  onClick={() => act("appoint")}
+                >
+                  Appoint
+                </Button>
+                {contractCopy?.effective_body && !contract.contract_copy_signed_at && (
+                  <span className="text-xs text-muted-foreground">Waiting for judge to sign contract copy</span>
+                )}
+              </>
+            )}
             {canManage && contract.status === "appointed" && <Button onClick={() => act("complete")}>Complete</Button>}
             {canManage && ["invitation", "accepted", "appointed"].includes(contract.status) && (
               <Button variant="destructive" onClick={() => act("cancel")}>

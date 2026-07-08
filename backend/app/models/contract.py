@@ -53,6 +53,9 @@ class Contract(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     requirement_responses: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reimbursement_estimate: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    contract_copy_signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    contract_copy_signed_body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     allocations: Mapped[list["ClassAllocation"]] = relationship(
         back_populates="contract", cascade="all, delete-orphan"

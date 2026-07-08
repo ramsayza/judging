@@ -1,7 +1,8 @@
-export type MembershipRole = "judge" | "organizer" | "admin";
+export type MembershipRole = "judge" | "organizer";
 export type MembershipStatus = "pending" | "active" | "removed";
 export type JoinPolicy = "open" | "approval";
-export type EventStatus = "draft" | "published" | "completed" | "cancelled";
+export type EventStatus = "draft" | "published" | "completed" | "cancelled" | "archived";
+export type EventRuleSet = "RKC" | "Nexus" | "IFCS" | "A4A" | "Independent";
 export type ContractStatus = "invitation" | "accepted" | "declined" | "appointed" | "cancelled" | "complete";
 
 export interface UserRead {
@@ -9,6 +10,7 @@ export interface UserRead {
   email: string;
   name: string;
   avatar_url: string | null;
+  is_platform_admin: boolean;
 }
 
 export interface OrganizationRead {
@@ -62,13 +64,20 @@ export interface ClassRestriction {
   level: string | null;
 }
 
+export interface RuleSetQualification {
+  rule_set: EventRuleSet;
+  qualified_date: string;
+}
+
 export interface UserDetailsRead {
   id: string;
   email: string;
   name: string;
   avatar_url: string | null;
+  is_platform_admin: boolean;
   home_postcode: string | null;
   class_restrictions: ClassRestriction[];
+  rule_set_qualifications: RuleSetQualification[];
 }
 
 export interface ClassRestrictionOptions {
@@ -81,6 +90,11 @@ export interface EventRead {
   organization_id: string;
   name: string;
   venue: string | null;
+  venue_postcode: string | null;
+  rule_set: EventRuleSet | null;
+  cost_per_mile: number;
+  reimbursement_cap: number | null;
+  contract_copy_override: string | null;
   start_date: string;
   end_date: string;
   status: EventStatus;
@@ -111,6 +125,27 @@ export interface EventClassRead {
   ring: string | null;
 }
 
+export interface ReimbursementEstimate {
+  miles_one_way: number;
+  miles_return: number;
+  rate_per_mile: string;
+  cap: string | null;
+  amount: string;
+  judge_postcode: string;
+  venue_postcode: string;
+}
+
+export interface RuleSetContractCopyRead {
+  rule_set: EventRuleSet;
+  body: string;
+}
+
+export interface ContractCopyRead {
+  effective_body: string;
+  signed_at: string | null;
+  signed_body: string | null;
+}
+
 export interface ContractRead {
   id: string;
   event_id: string;
@@ -129,6 +164,9 @@ export interface ContractRead {
   cancel_reason: string | null;
   notes: string | null;
   requirement_responses: Record<string, string | string[]> | null;
+  reimbursement_estimate: ReimbursementEstimate | null;
+  contract_copy_signed_at: string | null;
+  contract_copy_signed_body: string | null;
 }
 
 export interface MyContractRead {
@@ -150,6 +188,9 @@ export interface MyContractRead {
   decline_reason: string | null;
   cancel_reason: string | null;
   requirement_responses: Record<string, string | string[]> | null;
+  reimbursement_estimate: ReimbursementEstimate | null;
+  contract_copy_signed_at: string | null;
+  contract_copy_signed_body: string | null;
 }
 
 export interface ClassAllocationRead {

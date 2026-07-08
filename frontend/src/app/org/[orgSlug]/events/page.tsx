@@ -15,12 +15,16 @@ import type { EventRead } from "@/lib/types";
 function EventsListPageContent() {
   const { orgId, orgSlug, apiToken } = useOrgContext();
   const [events, setEvents] = useState<EventRead[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
-    apiFetch(`/api/v1/organizations/${orgId}/events`, { token: apiToken, orgId })
+    apiFetch(`/api/v1/organizations/${orgId}/events?include_archived=${showArchived}`, {
+      token: apiToken,
+      orgId,
+    })
       .then((res) => res.json())
       .then(setEvents);
-  }, [orgId, apiToken]);
+  }, [orgId, apiToken, showArchived]);
 
   return (
     <main>
@@ -32,6 +36,15 @@ function EventsListPageContent() {
           </Button>
         }
       />
+      <label className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={showArchived}
+          onChange={(e) => setShowArchived(e.target.checked)}
+        />
+        Show archived
+      </label>
       <Table>
         <TableHeader>
           <TableRow>
@@ -65,7 +78,7 @@ function EventsListPageContent() {
 
 export default function EventsListPage() {
   return (
-    <RoleGate allow={["organizer", "admin"]}>
+    <RoleGate allow={["organizer"]}>
       <EventsListPageContent />
     </RoleGate>
   );
