@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
 import type {
+  AllocationBoardEntry,
   ContractCopyRead,
   ContractRead,
   EventContractRequirementsRead,
@@ -48,6 +49,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
   const [reimbursementEstimate, setReimbursementEstimate] = useState<ReimbursementEstimate | null>(null);
   const [reimbursementError, setReimbursementError] = useState<string | null>(null);
   const [contractCopy, setContractCopy] = useState<ContractCopyRead | null>(null);
+  const [allocatedClasses, setAllocatedClasses] = useState<AllocationBoardEntry[]>([]);
   const canManage = role === "organizer";
 
   const refresh = useCallback(() => {
@@ -87,6 +89,16 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
       }
       setReimbursementEstimate(await res.json());
     });
+  }, [orgId, apiToken, contract, contractId]);
+
+  useEffect(() => {
+    if (!contract || !["appointed", "complete"].includes(contract.status)) return;
+    apiFetch(`/api/v1/organizations/${orgId}/events/${contract.event_id}/allocations`, {
+      token: apiToken,
+      orgId,
+    })
+      .then((res) => res.json())
+      .then((data: AllocationBoardEntry[]) => setAllocatedClasses(data.filter((a) => a.contract_id === contractId)));
   }, [orgId, apiToken, contract, contractId]);
 
   useEffect(() => {
@@ -204,6 +216,21 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
               );
             })}
           </div>
+
+          {["appointed", "complete"].includes(contract.status) && (
+            <div className="rounded-md border p-4 text-sm">
+              <p className="font-medium">Classes appointed to</p>
+              {allocatedClasses.length > 0 ? (
+                <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                  {allocatedClasses.map((a) => (
+                    <li key={a.allocation_id}>{a.event_class_name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No classes allocated yet.</p>
+              )}
+            </div>
+          )}
 
           {contract.decline_reason && (
             <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">

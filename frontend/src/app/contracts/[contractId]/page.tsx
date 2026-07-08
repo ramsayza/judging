@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/apiClient";
 import type {
+  AllocationBoardEntry,
   ContractCopyRead,
   EventContractRequirementsRead,
   MyContractRead,
@@ -51,6 +52,7 @@ export default function MyContractDetailPage({ params }: { params: Promise<{ con
   const [reimbursementEstimate, setReimbursementEstimate] = useState<ReimbursementEstimate | null>(null);
   const [reimbursementError, setReimbursementError] = useState<string | null>(null);
   const [contractCopy, setContractCopy] = useState<ContractCopyRead | null>(null);
+  const [allocatedClasses, setAllocatedClasses] = useState<AllocationBoardEntry[]>([]);
 
   useEffect(() => {
     if (sessionStatus === "unauthenticated") router.replace("/");
@@ -76,6 +78,16 @@ export default function MyContractDetailPage({ params }: { params: Promise<{ con
       .then((res) => res.json())
       .then((data: EventContractRequirementsRead) => setRequirementFields(data.fields));
   }, [apiToken, contract]);
+
+  useEffect(() => {
+    if (!contract || !apiToken || !["appointed", "complete"].includes(contract.status)) return;
+    apiFetch(`/api/v1/organizations/${contract.organization_id}/events/${contract.event_id}/allocations`, {
+      token: apiToken,
+      orgId: contract.organization_id,
+    })
+      .then((res) => res.json())
+      .then((data: AllocationBoardEntry[]) => setAllocatedClasses(data.filter((a) => a.contract_id === contractId)));
+  }, [apiToken, contract, contractId]);
 
   useEffect(() => {
     if (!contract || !apiToken || contract.status !== "invitation") return;
@@ -211,6 +223,21 @@ export default function MyContractDetailPage({ params }: { params: Promise<{ con
               );
             })}
           </div>
+
+          {["appointed", "complete"].includes(contract.status) && (
+            <div className="rounded-md border p-4 text-sm">
+              <p className="font-medium">Classes appointed to</p>
+              {allocatedClasses.length > 0 ? (
+                <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                  {allocatedClasses.map((a) => (
+                    <li key={a.allocation_id}>{a.event_class_name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">No classes allocated yet.</p>
+              )}
+            </div>
+          )}
 
           {contract.decline_reason && (
             <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
