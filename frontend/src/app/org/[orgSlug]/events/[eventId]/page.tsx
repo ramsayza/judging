@@ -178,7 +178,11 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
 
   if (!event) return <p className="p-8 text-sm text-muted-foreground">Loading...</p>;
 
-  const allocatableContracts = contracts.filter((c) => c.status === "accepted" || c.status === "appointed");
+  const allocatableContracts = contracts.filter(
+    (c) =>
+      (c.status === "accepted" || c.status === "appointed") &&
+      !(contractCopies[c.id]?.effective_body && !contractCopies[c.id]?.signed_at)
+  );
 
   return (
     <main className="space-y-6">
@@ -329,8 +333,11 @@ function EventDetailPageContent({ eventId }: { eventId: string }) {
                       {c.judge_name}
                     </Link>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="space-x-2">
                     <StatusBadge status={c.status} />
+                    {contractCopies[c.id]?.effective_body && !contractCopies[c.id]?.signed_at && (
+                      <Badge variant="warning">Unsigned</Badge>
+                    )}
                   </TableCell>
                   <TableCell className="space-x-2 text-right">
                     {canManage && c.status === "accepted" && (

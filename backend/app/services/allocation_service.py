@@ -1,5 +1,9 @@
+from sqlalchemy.orm import Session
+
 from app.models.contract import Contract, ContractStatus
+from app.models.event import Event
 from app.models.event_class import EventClass
+from app.services.contract_copy_service import get_effective_contract_copy
 
 
 class AllocationError(Exception):
@@ -10,13 +14,17 @@ class AllocationError(Exception):
 ALLOCATABLE_STATUSES = frozenset({ContractStatus.accepted, ContractStatus.appointed})
 
 
-def validate_can_allocate(contract: Contract, event_class: EventClass) -> None:
+def validate_can_allocate(db: Session, contract: Contract, event_class: EventClass) -> None:
     if contract.status not in ALLOCATABLE_STATUSES:
         raise AllocationError(
             f"cannot allocate a class to a contract in status '{contract.status.value}'"
         )
     if event_class.event_id != contract.event_id:
         raise AllocationError("class does not belong to the contract's event")
+    if contract.contract_copy_signed_at is None:
+        event = db.get(Event, contract.event_id)
+        if get_effective_contract_copy(db, event):
+            raise AllocationError("judge must sign the contract copy before being allocated to a class")
 
 
 def validate_can_deallocate(contract: Contract) -> None:

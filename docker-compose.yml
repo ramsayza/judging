@@ -11,10 +11,11 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol", "tcp", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass}"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 30s
 
   migrate:
     build: ./backend

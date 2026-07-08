@@ -97,6 +97,7 @@ def test_reimbursement_preview_returns_estimate(client, db_session, monkeypatch)
     assert body["miles_return"] == _expected_return_miles()
     expected_amount = round(Decimal(str(_expected_return_miles())) * Decimal("0.55"), 2)
     assert Decimal(body["amount"]) == expected_amount
+    assert body["capped"] is False
 
 
 def test_reimbursement_cap_applied(client, db_session, monkeypatch):
@@ -121,6 +122,7 @@ def test_reimbursement_cap_applied(client, db_session, monkeypatch):
     )
     assert r.status_code == 200
     assert Decimal(r.json()["amount"]) == Decimal("1.00")
+    assert r.json()["capped"] is True
 
 
 def test_accept_snapshots_reimbursement_estimate(client, db_session, monkeypatch):

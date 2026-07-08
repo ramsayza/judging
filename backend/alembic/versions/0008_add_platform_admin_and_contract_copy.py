@@ -1,7 +1,7 @@
 """add platform admin, shrink membership role enum (drop admin), rule set
 contract copies, event/contract contract-copy columns
 
-Revision ID: 0008_platform_admin_contract_copy
+Revision ID: 0008_admin_contract_copy
 Revises: 0007_rule_set_qualifications
 Create Date: 2026-07-08 00:00:00
 
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = "0008_platform_admin_contract_copy"
+revision: str = "0008_admin_contract_copy"
 down_revision: Union[str, None] = "0007_rule_set_qualifications"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -52,7 +52,7 @@ def upgrade() -> None:
             sa.Enum("RKC", "Nexus", "IFCS", "A4A", "Independent", name="eventruleset"),
             primary_key=True,
         ),
-        sa.Column("body", sa.Text(), nullable=False, server_default=""),
+        sa.Column("body", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
     )

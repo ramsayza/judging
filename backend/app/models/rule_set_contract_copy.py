@@ -1,4 +1,5 @@
-from sqlalchemy import Enum, Text
+from sqlalchemy import Enum
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -16,4 +17,4 @@ class RuleSetContractCopy(Base, TimestampMixin):
     rule_set: Mapped[EventRuleSet] = mapped_column(
         Enum(EventRuleSet, values_callable=lambda obj: [e.value for e in obj]), primary_key=True
     )
-    body: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    body: Mapped[str] = mapped_column(LONGTEXT, nullable=False, default="")

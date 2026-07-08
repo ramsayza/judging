@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -175,7 +176,12 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
               </p>
             )}
           </div>
-          <StatusBadge status={contract.status} />
+          <div className="flex items-center gap-2">
+            <StatusBadge status={contract.status} />
+            {contractCopy?.effective_body && !contract.contract_copy_signed_at && (
+              <Badge variant="warning">Unsigned</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className={cn("flex items-center justify-between", isTerminalOffPath && "opacity-40")}>
@@ -216,9 +222,14 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
               <p className="text-muted-foreground">
                 £{contract.reimbursement_estimate.amount} for an estimated{" "}
                 {contract.reimbursement_estimate.miles_return} miles return (£
-                {contract.reimbursement_estimate.rate_per_mile}/mile
-                {contract.reimbursement_estimate.cap ? ", capped" : ""})
+                {contract.reimbursement_estimate.rate_per_mile}/mile)
               </p>
+              {contract.reimbursement_estimate.capped && (
+                <p className="mt-1 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-500">
+                  <Badge variant="warning">Capped</Badge>
+                  Reimbursement limited to this event&apos;s £{contract.reimbursement_estimate.cap} cap.
+                </p>
+              )}
             </div>
           )}
 
@@ -226,11 +237,19 @@ export default function ContractDetailPage({ params }: { params: Promise<{ contr
             <div className="rounded-md border p-4 text-sm">
               <p className="font-medium">Estimated expenses</p>
               {reimbursementEstimate && (
-                <p className="text-muted-foreground">
-                  £{reimbursementEstimate.amount} for an estimated {reimbursementEstimate.miles_return} miles return
-                  (£{reimbursementEstimate.rate_per_mile}/mile{reimbursementEstimate.cap ? ", capped" : ""}) — straight-line
-                  estimate, not exact road mileage.
-                </p>
+                <>
+                  <p className="text-muted-foreground">
+                    £{reimbursementEstimate.amount} for an estimated {reimbursementEstimate.miles_return} miles
+                    return (£{reimbursementEstimate.rate_per_mile}/mile) — straight-line estimate, not exact road
+                    mileage.
+                  </p>
+                  {reimbursementEstimate.capped && (
+                    <p className="mt-1 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-500">
+                      <Badge variant="warning">Capped</Badge>
+                      Reimbursement limited to this event&apos;s £{reimbursementEstimate.cap} cap.
+                    </p>
+                  )}
+                </>
               )}
               {reimbursementError && (
                 <p className="text-muted-foreground">

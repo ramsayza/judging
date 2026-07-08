@@ -126,6 +126,40 @@ def test_cannot_allocate_before_accepted(client, db_session):
     assert r.status_code == 409
 
 
+def test_allocation_blocked_until_contract_copy_signed(client, db_session):
+    db = db_session
+    org = make_org(db)
+    organizer = make_user(db, "organizer@example.com")
+    judge = make_user(db, "judge@example.com")
+    make_membership(db, organizer, org, MembershipRole.organizer)
+    make_membership(db, judge, org, MembershipRole.judge)
+    ev = make_event(db, org, organizer)
+    ev.contract_copy_override = "Sample contract text"
+    cls = make_class(db, ev)
+    db.commit()
+
+    contract_id = _invite_and_accept(client, org, ev, organizer, judge)
+
+    r = client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/allocations",
+        json={"event_class_id": cls.id},
+        headers=auth_header(organizer),
+    )
+    assert r.status_code == 409
+
+    client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/sign-contract-copy",
+        headers=auth_header(judge),
+    )
+
+    r2 = client.post(
+        f"/api/v1/organizations/{org.id}/contracts/{contract_id}/allocations",
+        json={"event_class_id": cls.id},
+        headers=auth_header(organizer),
+    )
+    assert r2.status_code == 201
+
+
 def test_cannot_modify_allocations_on_completed_contract(client, db_session):
     db = db_session
     org = make_org(db)

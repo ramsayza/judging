@@ -10,6 +10,7 @@ class ReimbursementEstimate(BaseModel):
     miles_return: float
     rate_per_mile: str
     cap: str | None
+    capped: bool = False
     amount: str
     judge_postcode: str
     venue_postcode: str

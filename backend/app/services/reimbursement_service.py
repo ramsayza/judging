@@ -56,15 +56,16 @@ def estimate_reimbursement(
     miles_one_way = haversine_miles(lat1, lon1, lat2, lon2)
     miles_return = miles_one_way * 2
 
-    amount = Decimal(str(round(miles_return, 4))) * cost_per_mile
-    if cap is not None:
-        amount = min(amount, cap)
+    raw_amount = Decimal(str(round(miles_return, 4))) * cost_per_mile
+    capped = cap is not None and raw_amount > cap
+    amount = min(raw_amount, cap) if cap is not None else raw_amount
 
     return {
         "miles_one_way": round(miles_one_way, 1),
         "miles_return": round(miles_return, 1),
         "rate_per_mile": str(cost_per_mile),
         "cap": str(cap) if cap is not None else None,
+        "capped": capped,
         "amount": str(round(amount, 2)),
         "judge_postcode": judge_postcode,
         "venue_postcode": venue_postcode,

@@ -43,7 +43,7 @@ def create_allocation(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "class not found")
 
     try:
-        validate_can_allocate(contract, event_class)
+        validate_can_allocate(db, contract, event_class)
     except AllocationError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 

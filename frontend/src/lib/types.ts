@@ -130,6 +130,7 @@ export interface ReimbursementEstimate {
   miles_return: number;
   rate_per_mile: string;
   cap: string | null;
+  capped: boolean;
   amount: string;
   judge_postcode: string;
   venue_postcode: string;

@@ -3,7 +3,8 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Date, Enum, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import JSON, Date, Enum, ForeignKey, Index, Numeric, String
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -56,6 +57,6 @@ class Event(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     contract_requirement_fields: Mapped[list | None] = mapped_column(JSON, nullable=True)
-    contract_copy_override: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contract_copy_override: Mapped[str | None] = mapped_column(LONGTEXT, nullable=True)
 
     classes: Mapped[list["EventClass"]] = relationship(back_populates="event")

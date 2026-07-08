@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { RoleGate } from "@/components/RoleGate";
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/apiClient";
 import { useOrgContext } from "@/lib/org-context";
-import type { EventRuleSet } from "@/lib/types";
+import type { EventRuleSet, RuleSetContractCopyRead } from "@/lib/types";
 
 const RULE_SETS: EventRuleSet[] = ["RKC", "Nexus", "IFCS", "A4A", "Independent"];
 
@@ -28,9 +28,25 @@ function NewEventPageContent() {
   const [costPerMile, setCostPerMile] = useState("0.55");
   const [reimbursementCap, setReimbursementCap] = useState("");
   const [contractCopyOverride, setContractCopyOverride] = useState("");
+  const [ruleSetCopies, setRuleSetCopies] = useState<Record<string, string>>({});
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch("/api/v1/rule-set-copies", { token: apiToken })
+      .then((res) => res.json())
+      .then((data: RuleSetContractCopyRead[]) => {
+        setRuleSetCopies(Object.fromEntries(data.map((c) => [c.rule_set, c.body])));
+      });
+  }, [apiToken]);
+
+  function handleRuleSetChange(value: EventRuleSet) {
+    setRuleSet(value);
+    if (contractCopyOverride.trim() === "") {
+      setContractCopyOverride(ruleSetCopies[value] ?? "");
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,7 +102,7 @@ function NewEventPageContent() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="event-rule-set">Rule set</Label>
-                <Select value={ruleSet} onValueChange={(value) => setRuleSet(value as EventRuleSet)} required>
+                <Select value={ruleSet} onValueChange={(value) => handleRuleSetChange(value as EventRuleSet)} required>
                   <SelectTrigger id="event-rule-set">
                     <SelectValue placeholder="Select..." />
                   </SelectTrigger>
